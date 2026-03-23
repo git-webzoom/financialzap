@@ -41,8 +41,8 @@ export default function Wabas() {
     }
   }
 
-  const totalWabas   = groups.reduce((s, g) => s + g.wabas.length, 0)
-  const totalNumbers = Object.values(phoneMap).reduce((s, arr) => s + arr.length, 0)
+  const totalWabas   = (groups || []).reduce((s, g) => s + (g.wabas?.length || 0), 0)
+  const totalNumbers = Object.values(phoneMap).reduce((s, arr) => s + (arr?.length || 0), 0)
 
   return (
     <>

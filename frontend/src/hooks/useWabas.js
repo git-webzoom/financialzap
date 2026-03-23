@@ -10,8 +10,8 @@ export function useWabas() {
     setLoading(true)
     setError(null)
     try {
-      const { groups } = await wabaService.listWabas()
-      setGroups(groups)
+      const data = await wabaService.listWabas()
+      setGroups(Array.isArray(data.groups) ? data.groups : [])
     } catch (err) {
       setError(err.response?.data?.error || 'Erro ao carregar WABAs')
     } finally {
