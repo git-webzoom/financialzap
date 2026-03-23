@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 
 // Meta App ID — injected at build time via Vite env (VITE_META_APP_ID)
 // Falls back to a placeholder so the button always renders in dev.
-const APP_ID = import.meta.env.VITE_META_APP_ID || ''
+const APP_ID = (import.meta.env.VITE_META_APP_ID || '').trim().replace(/^undefined$/i, '')
 
 /**
  * EmbeddedSignup
@@ -20,6 +20,12 @@ export default function EmbeddedSignup({ onConnect, disabled = false }) {
   const [loading, setLoading]     = useState(false)
   const [error, setError]         = useState('')
   const resolveRef = useRef(null)
+
+  // ── Debug: log App ID on mount ────────────────────────────────────────────
+  useEffect(() => {
+    console.log('[EmbeddedSignup] VITE_META_APP_ID =', import.meta.env.VITE_META_APP_ID)
+    console.log('[EmbeddedSignup] APP_ID resolvido =', APP_ID || '(vazio — não configurado)')
+  }, [])
 
   // ── Load FB SDK once ──────────────────────────────────────────────────────
   useEffect(() => {
