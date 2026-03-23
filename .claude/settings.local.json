@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npm --version)",
+      "Bash(node -e \"require\\(''better-sqlite3''\\)\")",
+      "Bash(node -e \":*)",
+      "Bash(node -e \"const {createClient} = require\\(''@libsql/client''\\); console.log\\(''ok''\\)\")",
+      "Bash(node -e \"require\\(''crypto''\\).randomBytes\\(32\\).toString\\(''hex''\\)\")",
+      "Bash(node -e \"process.stdout.write\\(require\\(''crypto''\\).randomBytes\\(32\\).toString\\(''hex''\\)\\)\")",
+      "Bash(cmd /c \"netstat -ano | findstr :3001\")",
+      "Bash(netstat -ano)",
+      "Bash(taskkill /PID 7608 /F)",
+      "Bash(cmd /c \"taskkill /PID 7608 /F\")",
+      "Bash(node -e \"require\\(''axios''\\); console.log\\(''axios ok''\\)\")"
+    ]
+  }
+}
