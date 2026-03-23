@@ -44,13 +44,26 @@ function decrypt(encoded) {
  */
 async function connectWaba(userId, wabaId, accessToken) {
   // 1. Fetch WABA metadata from Meta
-  const wabaInfo = await metaService.getWabaInfo(wabaId, accessToken)
+  let wabaInfo
+  try {
+    wabaInfo = await metaService.getWabaInfo(wabaId, accessToken)
+  } catch (err) {
+    const metaError = err.response?.data?.error?.message || err.message
+    console.error('[connectWaba] Erro ao chamar API da Meta:', metaError)
+    throw new Error(`Falha ao consultar a API da Meta: ${metaError}`)
+  }
 
-  const businessId   = wabaInfo.owner_business_info?.id   ?? null
-  const businessName = wabaInfo.owner_business_info?.name ?? null
-  const currency     = wabaInfo.currency     ?? null
-  const timezone     = wabaInfo.timezone_id  ?? null
-  const name         = wabaInfo.name         ?? null
+  console.log('[connectWaba] Resposta completa da Meta:', JSON.stringify(wabaInfo, null, 2))
+
+  if (!wabaInfo || typeof wabaInfo !== 'object') {
+    throw new Error('Resposta inválida da API da Meta — nenhum dado retornado.')
+  }
+
+  const businessId   = wabaInfo?.owner_business_info?.id   ?? null
+  const businessName = wabaInfo?.owner_business_info?.name ?? null
+  const currency     = wabaInfo?.currency                  ?? null
+  const timezone     = wabaInfo?.timezone_id               ?? null
+  const name         = wabaInfo?.name                      ?? null
 
   // 2. Save WABA (upsert — reconnect updates the token)
   const db = getDb()
