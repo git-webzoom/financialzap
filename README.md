@@ -2,7 +2,7 @@
 
 ## 📋 Descrição
 
-Plataforma SaaS multi-tenant para gerenciamento e disparo em massa de mensagens WhatsApp utilizando exclusivamente a **API Oficial da Meta (Cloud API)**. O sistema permite que clientes conectem suas próprias WABAs via Embedded Signup OAuth, gerenciem templates, façam upload de contatos via CSV e realizem campanhas de disparo com divisão automática entre múltiplos templates.
+Plataforma SaaS multi-tenant para gerenciamento e disparo em massa de mensagens WhatsApp utilizando exclusivamente a **API Oficial da Meta (Cloud API)**. O sistema permite que clientes conectem suas próprias WABAs informando o Token de Acesso e o WABA ID, gerenciem templates, façam upload de contatos via CSV e realizem campanhas de disparo com divisão automática entre múltiplos templates.
 
 ---
 
@@ -40,13 +40,12 @@ Oferecer uma ferramenta profissional e escalável para disparos em massa no What
 
 ### Integrações Externas
 - **Meta Cloud API** (graph.facebook.com) — Envio de mensagens e gestão de WABAs
-- **Embedded Signup OAuth** — Autenticação e autorização das WABAs dos clientes
 
 ---
 
 ## 👥 Modelo de Negócio
 
-**Multi-tenant SaaS** — Cada cliente possui sua própria conta no sistema e conecta suas próprias WABAs via OAuth da Meta. O sistema não armazena credenciais fixas dos clientes — apenas os tokens gerados pelo fluxo de autorização.
+**Multi-tenant SaaS** — Cada cliente possui sua própria conta no sistema e conecta suas próprias WABAs informando manualmente o Token de Acesso e o WABA ID. O sistema criptografa e armazena esses tokens com segurança para realizar chamadas à API da Meta em nome do cliente.
 
 ---
 
@@ -58,8 +57,8 @@ Oferecer uma ferramenta profissional e escalável para disparos em massa no What
 - Autenticação via JWT
 
 ### Gestão de WABAs (Contas WhatsApp Business)
-- Conexão de WABAs via **Embedded Signup OAuth** da Meta
-- Após o OAuth, o sistema busca automaticamente o `business_id` de cada WABA via API da Meta
+- Conexão de WABAs via **cadastro manual**: o usuário informa o Token de Acesso e o WABA ID
+- Após salvar, o sistema chama automaticamente a API da Meta para buscar o `business_id` e `business_name` da WABA
 - As WABAs são **agrupadas visualmente por BM** no painel, usando o `business_id` como agrupador
 - A BM **não é uma entidade gerenciada diretamente** — é apenas um rótulo de agrupamento derivado da WABA
 - Reconectar ou revogar acesso de uma WABA
@@ -209,8 +208,8 @@ Para cada template selecionado:
 
 ```
 users               — Contas dos clientes no SaaS
-wabas               — WABAs conectadas (token OAuth, waba_id, business_id, business_name)
-                      → business_id e business_name são buscados da API da Meta após o OAuth
+wabas               — WABAs conectadas (token criptografado, waba_id, business_id, business_name)
+                      → business_id e business_name são buscados da API da Meta ao conectar
                       → usados apenas para agrupamento visual no painel
 phone_numbers       — Números de cada WABA
 templates           — Templates de cada WABA (cache local)
@@ -237,18 +236,17 @@ warming_logs        — Histórico diário de volume por número
 
 ---
 
-## 🔐 Fluxo de Autenticação OAuth (Embedded Signup)
+## 🔐 Fluxo de Conexão de WABA
 
 ```
-1. Cliente clica em "Conectar WABA"
-2. Popup da Meta abre (Embedded Signup)
-3. Cliente loga com perfil pessoal da Meta
-4. Cliente seleciona as WABAs que quer autorizar
-5. Meta retorna access_token + waba_id
-6. Sistema chama a API da Meta para buscar o business_id e business_name da WABA
-7. Sistema salva: token, waba_id, business_id, business_name no banco
-8. Sistema busca automaticamente os números daquela WABA e sincroniza os templates para o banco local
-9. No painel, a WABA aparece agrupada sob o nome da BM correspondente
+1. Usuário acessa a página WABAs
+2. Informa o Token de Acesso e o WABA ID nos campos do formulário
+3. Clica em "Conectar WABA"
+4. Backend chama a API da Meta: GET /{waba-id}?fields=id,name,owner_business_info
+5. Sistema salva no banco: token criptografado (AES-256-GCM), waba_id, business_id, business_name
+6. Sistema busca automaticamente todos os números daquela WABA e salva no banco
+7. Sistema sincroniza todos os templates daquela WABA para o banco local (com last_sync_at)
+8. No painel, a WABA aparece agrupada sob o nome da BM correspondente
 ```
 
 ---
@@ -268,7 +266,7 @@ warming_logs        — Histórico diário de volume por número
 - O tier sobe automaticamente com uso saudável (Meta decide)
 - Números com rating vermelho são pausados automaticamente
 - Divisão de contatos entre templates é feita por fatiamento sequencial do CSV
-- Tokens OAuth dos clientes são criptografados antes de salvar no banco
+- Tokens de acesso dos clientes são criptografados com AES-256-GCM antes de salvar no banco
 
 ---
 
@@ -329,7 +327,7 @@ zapdisparo/
 │       │   ├── Wabas/               ← Componentes específicos de WABAs
 │       │   │   ├── WabaCard.jsx     ← Card de uma WABA com seus números
 │       │   │   ├── NumeroItem.jsx   ← Item de número com rating e tier
-│       │   │   └── EmbeddedSignup.jsx ← Botão e lógica do OAuth da Meta
+│       │   │   └── EmbeddedSignup.jsx ← Formulário de conexão manual (Token + WABA ID)
 │       │   ├── Templates/           ← Componentes específicos de templates
 │       │   │   ├── TemplateCard.jsx
 │       │   │   └── TemplateForm.jsx ← Formulário de criação de template
