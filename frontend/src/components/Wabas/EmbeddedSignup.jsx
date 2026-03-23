@@ -1,129 +1,34 @@
-import { useEffect, useRef, useState } from 'react'
-
-// Meta App ID — injected at build time via Vite env (VITE_META_APP_ID)
-// Falls back to a placeholder so the button always renders in dev.
-const APP_ID = (import.meta.env.VITE_META_APP_ID || '').trim().replace(/^undefined$/i, '')
+import { useState } from 'react'
 
 /**
- * EmbeddedSignup
+ * ConectarWaba
  *
- * Loads the Facebook JS SDK, opens the Embedded Signup popup when the user
- * clicks the button, and calls `onConnect({ access_token, waba_id })` with
- * the credentials the user granted.
+ * Formulário manual para conectar uma WABA informando Token e WABA ID.
+ * Substitui o fluxo de Embedded Signup OAuth da Meta.
  *
  * Props:
- *   onConnect(payload)  — called after successful OAuth
- *   disabled            — disables the button
+ *   onConnect({ access_token, waba_id }) — chamado ao submeter
+ *   disabled                             — desabilita o formulário
  */
-export default function EmbeddedSignup({ onConnect, disabled = false }) {
-  const [sdkReady, setSdkReady]   = useState(false)
-  const [loading, setLoading]     = useState(false)
-  const [error, setError]         = useState('')
-  const resolveRef = useRef(null)
+export default function ConectarWaba({ onConnect, disabled = false }) {
+  const [token,   setToken]   = useState('')
+  const [wabaId,  setWabaId]  = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error,   setError]   = useState('')
 
-  // ── Debug: log App ID on mount ────────────────────────────────────────────
-  useEffect(() => {
-    console.log('[EmbeddedSignup] VITE_META_APP_ID =', import.meta.env.VITE_META_APP_ID)
-    console.log('[EmbeddedSignup] APP_ID resolvido =', APP_ID || '(vazio — não configurado)')
-  }, [])
-
-  // ── Load FB SDK once ──────────────────────────────────────────────────────
-  useEffect(() => {
-    if (window.FB) { setSdkReady(true); return }
-
-    window.fbAsyncInit = function () {
-      window.FB.init({
-        appId:   APP_ID,
-        cookie:  true,
-        xfbml:   false,
-        version: 'v20.0',
-      })
-      setSdkReady(true)
-    }
-
-    const script = document.createElement('script')
-    script.id  = 'facebook-jssdk'
-    script.src = 'https://connect.facebook.net/en_US/sdk.js'
-    script.async = true
-    script.defer = true
-    document.body.appendChild(script)
-
-    return () => {
-      // Cleanup only if we added the script
-      const existing = document.getElementById('facebook-jssdk')
-      if (existing) existing.remove()
-      delete window.fbAsyncInit
-    }
-  }, [])
-
-  // ── Handle OAuth response message from popup ───────────────────────────────
-  useEffect(() => {
-    function handleMessage(event) {
-      if (event.origin !== 'https://www.facebook.com') return
-      try {
-        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
-        if (data?.type === 'WA_EMBEDDED_SIGNUP' && resolveRef.current) {
-          resolveRef.current(data)
-          resolveRef.current = null
-        }
-      } catch { /* non-JSON messages from FB — ignore */ }
-    }
-    window.addEventListener('message', handleMessage)
-    return () => window.removeEventListener('message', handleMessage)
-  }, [])
-
-  // ── Open Embedded Signup ──────────────────────────────────────────────────
-  async function handleClick() {
-    if (!sdkReady) { setError('SDK do Facebook ainda não carregou. Aguarde.'); return }
-    if (!APP_ID)   { setError('VITE_META_APP_ID não configurado no .env do frontend.'); return }
+  async function handleSubmit(e) {
+    e.preventDefault()
+    if (!token.trim())  { setError('Informe o Token de Acesso.'); return }
+    if (!wabaId.trim()) { setError('Informe o WABA ID.'); return }
 
     setLoading(true)
     setError('')
-
     try {
-      // Wrap FB.login in a Promise
-      const loginResult = await new Promise((resolve, reject) => {
-        window.FB.login(
-          (response) => {
-            if (response.authResponse) resolve(response)
-            else reject(new Error('Usuário cancelou ou não autorizou o acesso.'))
-          },
-          {
-            scope: 'whatsapp_business_management,whatsapp_business_messaging',
-            extras: {
-              feature:  'whatsapp_embedded_signup',
-              setup:    {},
-              sessionInfoVersion: 2,
-            },
-          }
-        )
-      })
-
-      const { accessToken } = loginResult.authResponse
-
-      // After login, get the list of WABAs the user authorized
-      const wabaData = await new Promise((resolve, reject) => {
-        window.FB.api(
-          '/me/whatsapp_business_accounts',
-          { access_token: accessToken },
-          (res) => {
-            if (res?.error) reject(new Error(res.error.message))
-            else resolve(res)
-          }
-        )
-      })
-
-      const accounts = wabaData?.data || []
-      if (!accounts.length) {
-        throw new Error('Nenhuma WABA autorizada. Selecione ao menos uma conta no popup da Meta.')
-      }
-
-      // Connect each authorized WABA
-      for (const account of accounts) {
-        await onConnect({ access_token: accessToken, waba_id: account.id })
-      }
+      await onConnect({ access_token: token.trim(), waba_id: wabaId.trim() })
+      setToken('')
+      setWabaId('')
     } catch (err) {
-      setError(err.message || 'Erro ao conectar WABA')
+      setError(err.response?.data?.error || err.message || 'Erro ao conectar WABA')
     } finally {
       setLoading(false)
     }
@@ -132,75 +37,144 @@ export default function EmbeddedSignup({ onConnect, disabled = false }) {
   return (
     <>
       <style>{CSS}</style>
-      <div className="es-wrapper">
-        <button
-          className="es-btn"
-          onClick={handleClick}
-          disabled={disabled || loading || !sdkReady}
-        >
-          {loading ? (
-            <span className="es-spinner" />
-          ) : (
-            <IconMeta />
-          )}
-          {loading ? 'Conectando…' : 'Conectar WABA via Meta'}
-        </button>
+      <form className="cw-form" onSubmit={handleSubmit} noValidate>
+        <div className="cw-fields">
+          <div className="cw-field">
+            <label className="cw-label" htmlFor="cw-token">Token de Acesso</label>
+            <input
+              id="cw-token"
+              className="cw-input"
+              type="password"
+              placeholder="EAAn…"
+              value={token}
+              onChange={e => { setToken(e.target.value); setError('') }}
+              disabled={disabled || loading}
+              autoComplete="off"
+            />
+          </div>
 
-        {!sdkReady && !loading && (
-          <p className="es-hint">Carregando SDK da Meta…</p>
-        )}
-        {error && (
-          <p className="es-error" role="alert">⚠ {error}</p>
-        )}
-      </div>
+          <div className="cw-field">
+            <label className="cw-label" htmlFor="cw-waba-id">WABA ID</label>
+            <input
+              id="cw-waba-id"
+              className="cw-input"
+              type="text"
+              placeholder="123456789012345"
+              value={wabaId}
+              onChange={e => { setWabaId(e.target.value); setError('') }}
+              disabled={disabled || loading}
+              autoComplete="off"
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="cw-btn"
+            disabled={disabled || loading}
+          >
+            {loading ? <span className="cw-spinner" /> : <IconPlug />}
+            {loading ? 'Conectando…' : 'Conectar WABA'}
+          </button>
+        </div>
+
+        {error && <p className="cw-error" role="alert">⚠ {error}</p>}
+      </form>
     </>
   )
 }
 
-function IconMeta() {
+function IconPlug() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm4.5 7.5c.276 0 .5.224.5.5v4c0 .276-.224.5-.5.5s-.5-.224-.5-.5V10c0-.276.224-.5.5-.5zm-9 0c.276 0 .5.224.5.5v4c0 .276-.224.5-.5.5S7 14.276 7 14v-4c0-.276.224-.5.5-.5zm4.5 1c.276 0 .5.224.5.5v2c0 .276-.224.5-.5.5s-.5-.224-.5-.5v-2c0-.276.224-.5.5-.5z"/>
+    <svg width="15" height="15" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M7 2v4M13 2v4M5 6h10a1 1 0 011 1v3a6 6 0 01-12 0V7a1 1 0 011-1zM10 16v2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   )
 }
 
 const CSS = `
-  .es-wrapper { display: flex; flex-direction: column; gap: 8px; }
+  .cw-form { display: flex; flex-direction: column; gap: 8px; }
 
-  .es-btn {
+  .cw-fields {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .cw-field { display: flex; flex-direction: column; gap: 5px; }
+
+  .cw-label {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    color: #8a94a6;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+
+  .cw-input {
+    background: #1a1f28;
+    border: 1px solid #252c38;
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    color: #e8edf5;
+    outline: none;
+    width: 220px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .cw-input::placeholder { color: #4a5568; }
+  .cw-input:focus {
+    border-color: #22c55e60;
+    box-shadow: 0 0 0 3px #22c55e18;
+  }
+  .cw-input:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .cw-btn {
     display: inline-flex;
     align-items: center;
-    gap: 10px;
-    padding: 11px 20px;
+    gap: 8px;
+    padding: 9px 18px;
     background: #22c55e;
     border: none;
     border-radius: 8px;
     font-family: 'DM Sans', sans-serif;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     color: #000;
     cursor: pointer;
-    transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
     white-space: nowrap;
+    transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+    height: 38px;
+    flex-shrink: 0;
   }
-  .es-btn:hover:not(:disabled) {
+  .cw-btn:hover:not(:disabled) {
     background: #16a34a;
-    box-shadow: 0 0 20px #22c55e30;
+    box-shadow: 0 0 16px #22c55e28;
   }
-  .es-btn:active:not(:disabled) { transform: scale(0.98); }
-  .es-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .cw-btn:active:not(:disabled) { transform: scale(0.98); }
+  .cw-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-  .es-spinner {
-    width: 16px; height: 16px;
+  .cw-spinner {
+    width: 14px; height: 14px;
     border: 2px solid #00000030;
     border-top-color: #000;
     border-radius: 50%;
-    animation: es-spin 0.7s linear infinite;
+    animation: cw-spin 0.7s linear infinite;
     flex-shrink: 0;
   }
-  @keyframes es-spin { to { transform: rotate(360deg); } }
+  @keyframes cw-spin { to { transform: rotate(360deg); } }
 
-  .es-hint  { font-size: 12px; color: #4a5568; font-family: 'DM Sans', sans-serif; }
-  .es-error { font-size: 12px; color: #fca5a5; font-family: 'DM Sans', sans-serif; }
+  .cw-error {
+    font-size: 12px;
+    color: #fca5a5;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  @media (max-width: 640px) {
+    .cw-fields { flex-direction: column; align-items: stretch; }
+    .cw-input  { width: 100%; }
+    .cw-btn    { width: 100%; justify-content: center; }
+  }
 `

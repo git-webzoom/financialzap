@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useWabas } from '../../hooks/useWabas'
 import WabaCard from '../../components/Wabas/WabaCard'
-import EmbeddedSignup from '../../components/Wabas/EmbeddedSignup'
+import ConectarWaba from '../../components/Wabas/EmbeddedSignup'
 import * as wabaService from '../../services/wabaService'
 
 export default function Wabas() {
@@ -57,7 +57,7 @@ export default function Wabas() {
               {loading ? 'Carregando…' : `${totalWabas} WABA${totalWabas !== 1 ? 's' : ''} · ${totalNumbers} número${totalNumbers !== 1 ? 's' : ''}`}
             </p>
           </div>
-          <EmbeddedSignup onConnect={handleConnect} disabled={loading} />
+          <ConectarWaba onConnect={handleConnect} disabled={loading} />
         </div>
 
         {/* ── Feedback ── */}
@@ -125,7 +125,7 @@ function EmptyState() {
       </div>
       <p className="wabas-empty-title">Nenhuma WABA conectada</p>
       <p className="wabas-empty-sub">
-        Clique em <strong>Conectar WABA via Meta</strong> para autorizar suas contas WhatsApp Business usando o Embedded Signup da Meta.
+        Informe o <strong>Token de Acesso</strong> e o <strong>WABA ID</strong> acima para conectar sua conta WhatsApp Business.
       </p>
     </div>
   )
