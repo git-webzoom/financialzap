@@ -61,7 +61,11 @@ export function useAuth() {
     setLoading(true)
     try {
       await authService.logout()
+    } catch {
+      // Ignora erros do backend — o logout local sempre acontece
     } finally {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
       setUser(null)
       setLoading(false)
     }
