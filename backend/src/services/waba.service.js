@@ -70,6 +70,7 @@ async function connectWaba(userId, wabaId, accessToken) {
   const tokenEnc = encrypt(accessToken)
   const now = new Date().toISOString()
 
+  console.log('[connectWaba] STEP 2 — INSERT wabas | userId:', userId, '| wabaId:', wabaId, '| name:', name)
   await db.execute({
     sql: `
       INSERT INTO wabas (user_id, waba_id, name, access_token_enc, business_id, business_name, currency, timezone, status)
@@ -85,12 +86,17 @@ async function connectWaba(userId, wabaId, accessToken) {
     `,
     args: [userId, wabaId, name, tokenEnc, businessId, businessName, currency, timezone],
   })
+  console.log('[connectWaba] STEP 2 — wabas INSERT OK')
 
   // 3. Sync phone numbers
+  console.log('[connectWaba] STEP 3 — syncPhoneNumbers | wabaId:', wabaId)
   await syncPhoneNumbers(wabaId, accessToken)
+  console.log('[connectWaba] STEP 3 — syncPhoneNumbers OK')
 
   // 4. Sync templates
+  console.log('[connectWaba] STEP 4 — syncTemplates | wabaId:', wabaId)
   await syncTemplates(wabaId, accessToken)
+  console.log('[connectWaba] STEP 4 — syncTemplates OK')
 
   return {
     waba_id: wabaId,
