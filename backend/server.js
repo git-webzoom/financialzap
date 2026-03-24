@@ -1,6 +1,7 @@
 require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
+const cron = require('node-cron')
 const { migrate } = require('./src/db/migrate')
 
 const app = express()
@@ -21,6 +22,17 @@ migrate()
   .then(() => {
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`)
+    })
+
+    // Daily template sync — runs at 03:00 server time every day
+    cron.schedule('0 3 * * *', async () => {
+      console.log('[cron:templates] Starting daily template sync...')
+      try {
+        const { syncAllWabas } = require('./src/services/template.service')
+        await syncAllWabas()
+      } catch (err) {
+        console.error('[cron:templates] Daily sync error:', err.message)
+      }
     })
   })
   .catch((err) => {
