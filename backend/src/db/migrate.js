@@ -26,9 +26,8 @@ async function migrate() {
 
   // ── Column migrations (idempotent) ──
   // Add new columns to existing tables without breaking old databases.
-  await addColumnIfMissing(db, 'templates', 'delivered_count',  'INTEGER')
-  await addColumnIfMissing(db, 'templates', 'read_count',       'INTEGER')
-  await addColumnIfMissing(db, 'templates', 'last_edited_time', 'DATETIME')
+  await addColumnIfMissing(db, 'templates', 'quality_score',   'TEXT')
+  await addColumnIfMissing(db, 'templates', 'rejected_reason', 'TEXT')
 
   console.log('[db] Migration complete.')
 }

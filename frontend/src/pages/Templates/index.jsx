@@ -53,6 +53,27 @@ function StatusBadge({ status }) {
   )
 }
 
+const QUALITY_CONFIG = {
+  GREEN:   { label: 'Alta',     color: '#22c55e', bg: '#22c55e18', border: '#22c55e35' },
+  YELLOW:  { label: 'Média',    color: '#f59e0b', bg: '#f59e0b18', border: '#f59e0b35' },
+  RED:     { label: 'Baixa',    color: '#ef4444', bg: '#ef444418', border: '#ef444435' },
+  UNKNOWN: { label: 'N/D',      color: '#4a5568', bg: '#4a556815', border: '#4a556830' },
+}
+
+function QualityBadge({ score }) {
+  if (!score) return <span className="tbl-dash">—</span>
+  const cfg = QUALITY_CONFIG[score.toUpperCase()] ?? QUALITY_CONFIG.UNKNOWN
+  return (
+    <span
+      className="tbl-badge"
+      style={{ color: cfg.color, background: cfg.bg, borderColor: cfg.border }}
+    >
+      <span className="tbl-dot" style={{ background: cfg.color }} />
+      {cfg.label}
+    </span>
+  )
+}
+
 function SortIcon({ active, dir }) {
   return (
     <span className={`tbl-sort-icon${active ? ' tbl-sort-icon--active' : ''}`}>
@@ -64,17 +85,17 @@ function SortIcon({ active, dir }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const COLS = [
-  { key: 'name',             label: 'Nome do modelo' },
-  { key: 'category',         label: 'Categoria' },
-  { key: 'language',         label: 'Idioma' },
-  { key: 'status',           label: 'Status' },
-  { key: 'delivered_count',  label: 'Mensagens entregues' },
-  { key: 'read_rate',        label: 'Taxa de leitura' },
-  { key: 'last_edited_time', label: 'Última edição' },
+  { key: 'name',            label: 'Nome do modelo' },
+  { key: 'category',        label: 'Categoria' },
+  { key: 'language',        label: 'Idioma' },
+  { key: 'status',          label: 'Status' },
+  { key: 'quality_score',   label: 'Qualidade' },
+  { key: 'rejected_reason', label: 'Motivo rejeição' },
+  { key: 'last_sync_at',    label: 'Última sincronização' },
 ]
 
 export default function Templates() {
-  const { templates, loading, syncing, error, load, create, sync } = useTemplates()
+  const { templates, loading, syncing, error, load, create, sync, remove } = useTemplates()
   const { groups, load: loadWabas } = useWabas()
 
   const wabas = useMemo(() => groups.flatMap(g => g.wabas), [groups])
@@ -87,8 +108,11 @@ export default function Templates() {
   const [globalSyncing, setGlobalSyncing] = useState(false)
   const [statusFilter,  setStatusFilter]  = useState('ALL')
   const [selected,      setSelected]      = useState(new Set())
-  const [sortKey,       setSortKey]       = useState('last_edited_time')
+  const [sortKey,       setSortKey]       = useState('last_sync_at')
   const [sortDir,       setSortDir]       = useState('desc')
+  const [detailTemplate, setDetailTemplate] = useState(null) // template aberto no modal
+  const [deleting,       setDeleting]       = useState(false)
+  const [deleteError,    setDeleteError]    = useState('')
 
   useEffect(() => { loadWabas() }, [loadWabas])
   useEffect(() => { load(filterWabaId || null) }, [load, filterWabaId])
@@ -121,7 +145,7 @@ export default function Templates() {
       let va = a[sortKey] ?? ''
       let vb = b[sortKey] ?? ''
       // numeric sort for counts
-      if (sortKey === 'delivered_count' || sortKey === 'read_rate') {
+      if (false) { // no numeric columns currently
         va = Number(va) || 0
         vb = Number(vb) || 0
         return sortDir === 'asc' ? va - vb : vb - va
@@ -175,6 +199,21 @@ export default function Templates() {
     }
     await load(filterWabaId || null)
     setGlobalSyncing(false)
+  }
+
+  async function handleDelete(t) {
+    if (!window.confirm(`Excluir o template "${t.name}"? Esta ação é irreversível.`)) return
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      await remove(t.waba_id, t.template_id)
+      setDetailTemplate(null)
+      await load(filterWabaId || null)
+    } catch (err) {
+      setDeleteError(err.response?.data?.error || err.message || 'Erro ao excluir template')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   async function handleCreate(payload) {
@@ -326,14 +365,13 @@ export default function Templates() {
                 {visible.map(t => {
                   const rowId = `${t.waba_id}:${t.template_id}`
                   const isChecked = selected.has(rowId)
-                  const readRate = (t.delivered_count && t.read_count)
-                    ? `${Math.round((t.read_count / t.delivered_count) * 100)}% (${t.read_count})`
-                    : t.read_count
-                      ? `— (${t.read_count})`
-                      : '—'
-
                   return (
-                    <tr key={rowId} className={`tbl-row${isChecked ? ' tbl-row--selected' : ''}`}>
+                    <tr
+                      key={rowId}
+                      className={`tbl-row${isChecked ? ' tbl-row--selected' : ''}`}
+                      onClick={e => { if (e.target.type !== 'checkbox') setDetailTemplate(t) }}
+                      style={{ cursor: 'pointer' }}
+                    >
                       <td className="tbl-td tbl-td--check">
                         <input
                           type="checkbox"
@@ -353,15 +391,26 @@ export default function Templates() {
                       <td className="tbl-td">{CATEGORY_LABELS[t.category] || t.category || '—'}</td>
                       <td className="tbl-td">{t.language || '—'}</td>
                       <td className="tbl-td"><StatusBadge status={t.status} /></td>
-                      <td className="tbl-td tbl-td--num">{t.delivered_count ?? '—'}</td>
-                      <td className="tbl-td tbl-td--num">{readRate}</td>
-                      <td className="tbl-td tbl-td--date">{formatDatePT(t.last_edited_time)}</td>
+                      <td className="tbl-td"><QualityBadge score={t.quality_score} /></td>
+                      <td className="tbl-td tbl-td--rejected">{t.rejected_reason || '—'}</td>
+                      <td className="tbl-td tbl-td--date">{formatDatePT(t.last_sync_at)}</td>
                     </tr>
                   )
                 })}
               </tbody>
             </table>
           </div>
+        )}
+
+        {/* ── Template detail modal ── */}
+        {detailTemplate && (
+          <TemplateModal
+            template={detailTemplate}
+            onClose={() => { setDetailTemplate(null); setDeleteError('') }}
+            onDelete={handleDelete}
+            deleting={deleting}
+            deleteError={deleteError}
+          />
         )}
 
         {/* ── Selection bar ── */}
@@ -405,6 +454,109 @@ const STATUS_TAB_LABELS = {
   REJECTED: 'Rejeitados',
 }
 
+// ─── Template detail modal ────────────────────────────────────────────────────
+
+function TemplateModal({ template: t, onClose, onDelete, deleting, deleteError }) {
+  const structure = Array.isArray(t.structure) ? t.structure : []
+  const header   = structure.find(c => c.type === 'HEADER')
+  const body     = structure.find(c => c.type === 'BODY')
+  const footer   = structure.find(c => c.type === 'FOOTER')
+  const buttons  = structure.find(c => c.type === 'BUTTONS')
+
+  // Close on backdrop click
+  function handleBackdrop(e) {
+    if (e.target === e.currentTarget) onClose()
+  }
+
+  return (
+    <div className="tdm-backdrop" onClick={handleBackdrop}>
+      <div className="tdm-panel">
+
+        {/* Header */}
+        <div className="tdm-header">
+          <div className="tdm-title-wrap">
+            <span className="tdm-name">{t.name}</span>
+            <div className="tdm-badges">
+              <StatusBadge status={t.status} />
+              {t.quality_score && <QualityBadge score={t.quality_score} />}
+            </div>
+          </div>
+          <button className="tdm-close" onClick={onClose} title="Fechar"><IconClose /></button>
+        </div>
+
+        {/* Meta info */}
+        <div className="tdm-meta">
+          <MetaItem label="Categoria"  value={CATEGORY_LABELS[t.category] || t.category || '—'} />
+          <MetaItem label="Idioma"     value={t.language || '—'} />
+          <MetaItem label="WABA"       value={t.waba_name || t.waba_id} mono />
+          <MetaItem label="ID"         value={t.template_id} mono />
+          {t.rejected_reason && (
+            <MetaItem label="Motivo rejeição" value={t.rejected_reason} danger />
+          )}
+          <MetaItem label="Sincronizado" value={formatDatePT(t.last_sync_at)} />
+        </div>
+
+        {/* Preview */}
+        <div className="tdm-preview-title">Prévia da mensagem</div>
+        <div className="tdm-bubble-wrap">
+          <div className="tdm-bubble">
+            {header && (
+              <div className="tdm-bubble-header">
+                {header.format === 'TEXT' && <strong>{header.text}</strong>}
+                {header.format === 'IMAGE' && <span className="tdm-media-badge">📷 Imagem</span>}
+                {header.format === 'VIDEO' && <span className="tdm-media-badge">🎬 Vídeo</span>}
+                {header.format === 'DOCUMENT' && <span className="tdm-media-badge">📄 Documento</span>}
+              </div>
+            )}
+            {body && <div className="tdm-bubble-body">{body.text}</div>}
+            {footer && <div className="tdm-bubble-footer">{footer.text}</div>}
+            {buttons?.buttons?.length > 0 && (
+              <div className="tdm-bubble-buttons">
+                {buttons.buttons.map((btn, i) => (
+                  <div key={i} className="tdm-bubble-btn">
+                    {btn.type === 'URL'           && `🔗 ${btn.text}`}
+                    {btn.type === 'PHONE_NUMBER'  && `📞 ${btn.text}`}
+                    {btn.type === 'QUICK_REPLY'   && `↩ ${btn.text}`}
+                    {!['URL','PHONE_NUMBER','QUICK_REPLY'].includes(btn.type) && btn.text}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Delete error */}
+        {deleteError && (
+          <div className="tdm-err">⚠ {deleteError}</div>
+        )}
+
+        {/* Actions */}
+        <div className="tdm-actions">
+          <button className="tp-btn tp-btn--sync" onClick={onClose}>Fechar</button>
+          <button
+            className="tp-btn tp-btn--danger"
+            onClick={() => onDelete(t)}
+            disabled={deleting}
+          >
+            {deleting ? 'Excluindo…' : <><IconTrash /> Excluir template</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MetaItem({ label, value, mono, danger }) {
+  return (
+    <div className="tdm-meta-item">
+      <span className="tdm-meta-label">{label}</span>
+      <span className={`tdm-meta-value${mono ? ' tdm-meta-value--mono' : ''}${danger ? ' tdm-meta-value--danger' : ''}`}>
+        {value}
+      </span>
+    </div>
+  )
+}
+
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
 function IconRefresh() {
@@ -428,6 +580,14 @@ function IconClose() {
   return (
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
+function IconTrash() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M2 4h12M5 4V2.5a.5.5 0 01.5-.5h5a.5.5 0 01.5.5V4M6 7v5M10 7v5M3 4l1 9.5a.5.5 0 00.5.5h7a.5.5 0 00.5-.5L13 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   )
 }
@@ -683,8 +843,9 @@ const CSS = `
     background: #0c0f13;
   }
   .tbl-td--check { width: 40px; padding: 12px 12px; background: #0c0f13; }
-  .tbl-td--num { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
   .tbl-td--date { white-space: nowrap; font-size: 12px; color: #4a5568; }
+  .tbl-td--rejected { font-size: 11px; color: #ef4444; font-family: 'JetBrains Mono', monospace; }
+  .tbl-dash { color: #2d3748; }
 
   .tbl-name {
     display: block;
@@ -758,4 +919,171 @@ const CSS = `
     transition: color 0.15s;
   }
   .tp-sel-clear:hover { color: #8a94a6; }
+
+  /* ── Danger button ── */
+  .tp-btn--danger {
+    background: #ef444415;
+    border: 1px solid #ef444440;
+    color: #ef4444;
+  }
+  .tp-btn--danger:hover:not(:disabled) { background: #ef444425; }
+  .tp-btn--danger:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* ── Template detail modal ── */
+  .tdm-backdrop {
+    position: fixed;
+    inset: 0;
+    background: #00000080;
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 24px;
+  }
+
+  .tdm-panel {
+    background: #141820;
+    border: 1px solid #252c38;
+    border-radius: 14px;
+    width: 100%;
+    max-width: 560px;
+    max-height: 90vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 24px;
+  }
+  .tdm-panel::-webkit-scrollbar { width: 4px; }
+  .tdm-panel::-webkit-scrollbar-thumb { background: #252c38; border-radius: 2px; }
+
+  .tdm-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .tdm-title-wrap { display: flex; flex-direction: column; gap: 8px; }
+  .tdm-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    font-weight: 600;
+    color: #e8edf5;
+    word-break: break-all;
+  }
+  .tdm-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tdm-close {
+    width: 28px; height: 28px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: #1a1f28; border: 1px solid #252c38; border-radius: 6px;
+    color: #4a5568; cursor: pointer; transition: color 0.15s, background 0.15s;
+  }
+  .tdm-close:hover { color: #e8edf5; background: #252c38; }
+
+  .tdm-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 24px;
+    padding: 14px 16px;
+    background: #0f1215;
+    border: 1px solid #1a1f28;
+    border-radius: 8px;
+  }
+  .tdm-meta-item { display: flex; flex-direction: column; gap: 2px; }
+  .tdm-meta-label { font-size: 10px; color: #4a5568; font-family: 'DM Sans', sans-serif; text-transform: uppercase; letter-spacing: 0.5px; }
+  .tdm-meta-value { font-size: 13px; color: #8a94a6; font-family: 'DM Sans', sans-serif; }
+  .tdm-meta-value--mono { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #4a5568; }
+  .tdm-meta-value--danger { color: #ef4444; font-size: 11px; }
+
+  .tdm-preview-title {
+    font-size: 11px;
+    font-family: 'DM Sans', sans-serif;
+    color: #4a5568;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .tdm-bubble-wrap {
+    display: flex;
+    justify-content: flex-end;
+    padding: 12px;
+    background: #1a4731;
+    border-radius: 10px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' opacity='0.06'%3E%3Ccircle cx='20' cy='20' r='10' fill='%2322c55e'/%3E%3C/svg%3E");
+  }
+
+  .tdm-bubble {
+    background: #dcf8c6;
+    border-radius: 10px 2px 10px 10px;
+    padding: 10px 14px;
+    max-width: 90%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    box-shadow: 0 1px 3px #00000030;
+  }
+
+  .tdm-bubble-header {
+    font-size: 13px;
+    font-weight: 700;
+    color: #111827;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .tdm-media-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: #b7e0a0;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #166534;
+  }
+  .tdm-bubble-body {
+    font-size: 13px;
+    color: #1f2937;
+    font-family: 'DM Sans', sans-serif;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .tdm-bubble-footer {
+    font-size: 11px;
+    color: #6b7280;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .tdm-bubble-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px solid #a7d99030;
+  }
+  .tdm-bubble-btn {
+    font-size: 12px;
+    color: #0ea5e9;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    text-align: center;
+    padding: 4px 0;
+  }
+
+  .tdm-err {
+    padding: 8px 12px;
+    background: #ef444415;
+    border: 1px solid #ef444430;
+    border-radius: 7px;
+    font-size: 12px;
+    color: #fca5a5;
+    font-family: 'DM Sans', sans-serif;
+  }
+
+  .tdm-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+  }
 `

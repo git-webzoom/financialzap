@@ -19,3 +19,9 @@ export async function syncTemplates(wabaId) {
   const { data } = await api.post(`/api/templates/sync/${wabaId}`)
   return data // { ok, templates_synced }
 }
+
+// DELETE /api/templates/:wabaId/:templateId — deletes from Meta and local DB
+export async function deleteTemplate(wabaId, templateId) {
+  const { data } = await api.delete(`/api/templates/${wabaId}/${templateId}`)
+  return data // { ok }
+}

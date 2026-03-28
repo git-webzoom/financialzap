@@ -219,30 +219,25 @@ async function syncTemplates(wabaId, accessToken) {
   const now = new Date().toISOString()
 
   for (const t of templates) {
-    // quality_score.metrics: [{ id: 'confirmed_delivered', value: N }, { id: 'read', value: N }]
-    const qs             = t.quality_score ?? {}
-    const deliveredCount = qs.metrics?.find(m => m.id === 'confirmed_delivered')?.value ?? null
-    const readCount      = qs.metrics?.find(m => m.id === 'read')?.value               ?? null
-    const lastEditedTime = t.last_updated_time
-      ? new Date(t.last_updated_time * 1000).toISOString()
-      : null
+    // quality_score returns: { score: 'GREEN'|'YELLOW'|'RED'|'UNKNOWN', date, reasons[] }
+    const qualityScore   = t.quality_score?.score ?? null
+    const rejectedReason = t.rejected_reason       ?? null
 
     await db.execute({
       sql: `
         INSERT INTO templates
           (waba_id, template_id, name, status, category, language, structure,
-           delivered_count, read_count, last_edited_time, last_sync_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           quality_score, rejected_reason, last_sync_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(waba_id, template_id) DO UPDATE SET
-          name             = excluded.name,
-          status           = excluded.status,
-          category         = excluded.category,
-          language         = excluded.language,
-          structure        = excluded.structure,
-          delivered_count  = excluded.delivered_count,
-          read_count       = excluded.read_count,
-          last_edited_time = excluded.last_edited_time,
-          last_sync_at     = excluded.last_sync_at
+          name            = excluded.name,
+          status          = excluded.status,
+          category        = excluded.category,
+          language        = excluded.language,
+          structure       = excluded.structure,
+          quality_score   = excluded.quality_score,
+          rejected_reason = excluded.rejected_reason,
+          last_sync_at    = excluded.last_sync_at
       `,
       args: [
         wabaId,
@@ -252,9 +247,8 @@ async function syncTemplates(wabaId, accessToken) {
         t.category ?? null,
         t.language ?? null,
         JSON.stringify(t.components ?? []),
-        deliveredCount,
-        readCount,
-        lastEditedTime,
+        qualityScore,
+        rejectedReason,
         now,
       ],
     })

@@ -40,5 +40,9 @@ export function useTemplates() {
     }
   }, [])
 
-  return { templates, loading, syncing, error, load, create, sync }
+  const remove = useCallback(async (wabaId, templateId) => {
+    await templateService.deleteTemplate(wabaId, templateId)
+  }, [])
+
+  return { templates, loading, syncing, error, load, create, sync, remove }
 }

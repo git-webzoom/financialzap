@@ -83,8 +83,8 @@ async function createTemplate(userId, wabaId, payload) {
       metaResult.id,
       payload.name,
       metaResult.status ?? 'PENDING',
-      payload.category ?? null,
-      payload.language ?? null,
+      payload.category  ?? null,
+      payload.language  ?? null,
       JSON.stringify(payload.components ?? []),
       now,
     ],
@@ -152,9 +152,50 @@ async function syncAllWabas() {
   return { wabas: rows.length, templates: total }
 }
 
+// ─── Delete template (Meta API → local DB) ───────────────────────────────────
+
+async function deleteTemplate(userId, wabaId, templateId) {
+  const db = getDb()
+
+  // Fetch template name + verify ownership via waba
+  const { rows } = await db.execute({
+    sql: `SELECT t.name, w.access_token_enc
+          FROM templates t
+          JOIN wabas w ON w.waba_id = t.waba_id
+          WHERE t.waba_id = ? AND t.template_id = ? AND w.user_id = ?`,
+    args: [wabaId, templateId, userId],
+  })
+  if (!rows.length) {
+    const err = new Error('Template not found')
+    err.status = 404
+    throw err
+  }
+
+  const { name, access_token_enc } = rows[0]
+  const token = wabaService.getDecryptedToken({ access_token_enc })
+
+  // Delete on Meta (by name — Meta's requirement)
+  try {
+    await metaService.deleteTemplate(wabaId, token, name)
+  } catch (err) {
+    // If Meta says it doesn't exist, proceed to delete locally anyway
+    const metaMsg = err.response?.data?.error?.message || ''
+    if (!metaMsg.includes('does not exist') && !metaMsg.includes('not found')) {
+      throw new Error(`Meta API error: ${metaMsg || err.message}`)
+    }
+  }
+
+  // Delete locally
+  await db.execute({
+    sql: 'DELETE FROM templates WHERE waba_id = ? AND template_id = ?',
+    args: [wabaId, templateId],
+  })
+}
+
 module.exports = {
   listTemplates,
   createTemplate,
+  deleteTemplate,
   syncByWaba,
   syncAllWabas,
 }

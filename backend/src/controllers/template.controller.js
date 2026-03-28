@@ -44,4 +44,14 @@ async function sync(req, res) {
   }
 }
 
-module.exports = { list, create, sync }
+// DELETE /api/templates/:wabaId/:templateId
+async function remove(req, res) {
+  try {
+    await templateService.deleteTemplate(req.user.sub, req.params.wabaId, req.params.templateId)
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message })
+  }
+}
+
+module.exports = { list, create, sync, remove }

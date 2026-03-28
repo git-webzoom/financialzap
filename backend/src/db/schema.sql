@@ -68,9 +68,8 @@ CREATE TABLE IF NOT EXISTS templates (
   category         TEXT,           -- MARKETING | UTILITY | AUTHENTICATION
   language         TEXT,
   structure        TEXT,           -- JSON serializado
-  delivered_count  INTEGER,        -- total de entregas confirmadas (quality_score.metrics)
-  read_count       INTEGER,        -- total de leituras (quality_score.metrics)
-  last_edited_time DATETIME,       -- last_updated_time da Meta (Unix → ISO)
+  quality_score    TEXT,           -- GREEN | YELLOW | RED | UNKNOWN (quality_score.score da Meta)
+  rejected_reason  TEXT,           -- motivo de rejeição (rejected_reason da Meta)
   last_sync_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
   created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (waba_id, template_id),

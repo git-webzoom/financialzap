@@ -14,4 +14,7 @@ router.post('/', ctrl.create)
 // Manually sync all templates for a WABA from Meta API
 router.post('/sync/:wabaId', ctrl.sync)
 
+// Delete a template from Meta and local DB
+router.delete('/:wabaId/:templateId', ctrl.remove)
+
 module.exports = router

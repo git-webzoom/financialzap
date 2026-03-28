@@ -57,7 +57,7 @@ async function getPhoneNumberInfo(phoneNumberId, accessToken) {
 async function getTemplates(wabaId, accessToken) {
   const templates = []
   let params = {
-    fields: 'id,name,status,category,language,components,quality_score,last_updated_time',
+    fields: 'id,name,status,category,language,components,quality_score,rejected_reason',
     limit: 100,
     access_token: accessToken,
   }
@@ -88,6 +88,16 @@ async function createTemplate(wabaId, accessToken, payload) {
   return data
 }
 
+/**
+ * Delete a message template by name (Meta requires name, not ID).
+ */
+async function deleteTemplate(wabaId, accessToken, templateName) {
+  const { data } = await metaApi.delete(`/${wabaId}/message_templates`, {
+    params: { access_token: accessToken, name: templateName },
+  })
+  return data
+}
+
 // ─── Send message ─────────────────────────────────────────────────────────────
 
 /**
@@ -106,5 +116,6 @@ module.exports = {
   getPhoneNumberInfo,
   getTemplates,
   createTemplate,
+  deleteTemplate,
   sendMessage,
 }
