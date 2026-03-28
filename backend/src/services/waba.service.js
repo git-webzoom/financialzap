@@ -88,15 +88,23 @@ async function connectWaba(userId, wabaId, accessToken) {
   })
   console.log('[connectWaba] STEP 2 — wabas INSERT OK')
 
-  // 3. Sync phone numbers
+  // 3. Sync phone numbers (non-fatal — WABA connect still succeeds if this fails)
   console.log('[connectWaba] STEP 3 — syncPhoneNumbers | wabaId:', wabaId)
-  await syncPhoneNumbers(wabaId, accessToken)
-  console.log('[connectWaba] STEP 3 — syncPhoneNumbers OK')
+  try {
+    await syncPhoneNumbers(wabaId, accessToken)
+    console.log('[connectWaba] STEP 3 — syncPhoneNumbers OK')
+  } catch (err) {
+    console.error('[connectWaba] STEP 3 — syncPhoneNumbers FAILED (non-fatal):', err.message)
+  }
 
-  // 4. Sync templates
+  // 4. Sync templates (non-fatal — WABA connect still succeeds if this fails)
   console.log('[connectWaba] STEP 4 — syncTemplates | wabaId:', wabaId)
-  await syncTemplates(wabaId, accessToken)
-  console.log('[connectWaba] STEP 4 — syncTemplates OK')
+  try {
+    await syncTemplates(wabaId, accessToken)
+    console.log('[connectWaba] STEP 4 — syncTemplates OK')
+  } catch (err) {
+    console.error('[connectWaba] STEP 4 — syncTemplates FAILED (non-fatal):', err.message)
+  }
 
   return {
     waba_id: wabaId,
@@ -218,43 +226,49 @@ async function syncTemplates(wabaId, accessToken) {
   const db = getDb()
   const now = new Date().toISOString()
 
+  let synced = 0
   for (const t of templates) {
-    // quality_score returns: { score: 'GREEN'|'YELLOW'|'RED'|'UNKNOWN', date, reasons[] }
-    const qualityScore   = t.quality_score?.score ?? null
-    const rejectedReason = t.rejected_reason       ?? null
+    try {
+      // quality_score returns: { score: 'GREEN'|'YELLOW'|'RED'|'UNKNOWN', date, reasons[] }
+      const qualityScore   = t.quality_score?.score ?? null
+      const rejectedReason = t.rejected_reason      ?? null
 
-    await db.execute({
-      sql: `
-        INSERT INTO templates
-          (waba_id, template_id, name, status, category, language, structure,
-           quality_score, rejected_reason, last_sync_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(waba_id, template_id) DO UPDATE SET
-          name            = excluded.name,
-          status          = excluded.status,
-          category        = excluded.category,
-          language        = excluded.language,
-          structure       = excluded.structure,
-          quality_score   = excluded.quality_score,
-          rejected_reason = excluded.rejected_reason,
-          last_sync_at    = excluded.last_sync_at
-      `,
-      args: [
-        wabaId,
-        t.id,
-        t.name,
-        t.status   ?? null,
-        t.category ?? null,
-        t.language ?? null,
-        JSON.stringify(t.components ?? []),
-        qualityScore,
-        rejectedReason,
-        now,
-      ],
-    })
+      await db.execute({
+        sql: `
+          INSERT INTO templates
+            (waba_id, template_id, name, status, category, language, structure,
+             quality_score, rejected_reason, last_sync_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(waba_id, template_id) DO UPDATE SET
+            name            = excluded.name,
+            status          = excluded.status,
+            category        = excluded.category,
+            language        = excluded.language,
+            structure       = excluded.structure,
+            quality_score   = excluded.quality_score,
+            rejected_reason = excluded.rejected_reason,
+            last_sync_at    = excluded.last_sync_at
+        `,
+        args: [
+          wabaId,
+          t.id,
+          t.name,
+          t.status   ?? null,
+          t.category ?? null,
+          t.language ?? null,
+          JSON.stringify(t.components ?? []),
+          qualityScore,
+          rejectedReason,
+          now,
+        ],
+      })
+      synced++
+    } catch (err) {
+      console.error(`[syncTemplates] Erro ao salvar template ${t.id} (${t.name}):`, err.message)
+    }
   }
 
-  return templates.length
+  return synced
 }
 
 // ─── Get phone numbers for a WABA (from local DB) ────────────────────────────
