@@ -11,6 +11,9 @@ router.get('/', ctrl.list)
 // Create a new template on Meta and save locally
 router.post('/', ctrl.create)
 
+// Batch create N templates with incrementing name suffix
+router.post('/batch', ctrl.batchCreate)
+
 // Manually sync all templates for a WABA from Meta API
 router.post('/sync/:wabaId', ctrl.sync)
 

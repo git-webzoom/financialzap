@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -94,7 +94,7 @@ function emptyButton() {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function TemplateForm({ wabas = [], onSubmit, onCancel, submitting = false, error = '' }) {
+export default function TemplateForm({ wabas = [], onSubmit, onBatchSubmit, onCancel, submitting = false, error = '', externalBatchResults = null }) {
   const [name,           setName]           = useState('')
   const [wabaId,         setWabaId]         = useState('')
   const [category,       setCategory]       = useState('MARKETING')
@@ -110,8 +110,11 @@ export default function TemplateForm({ wabas = [], onSubmit, onCancel, submittin
   const [footerText,     setFooterText]     = useState('')
   // Buttons (up to 3)
   const [buttons,        setButtons]        = useState([])
+  // Batch
+  const [quantity,       setQuantity]       = useState(1)
   // Validation
   const [nameError,      setNameError]      = useState('')
+  const [quantityError,  setQuantityError]  = useState('')
 
   // Re-extract variables whenever bodyText changes
   useEffect(() => {
@@ -125,10 +128,27 @@ export default function TemplateForm({ wabas = [], onSubmit, onCancel, submittin
 
   const varIndices = extractVars(bodyText)
 
+  // Whether the name ends with a number (required for batch mode)
+  const nameEndsWithNumber = useMemo(() => /\d+$/.test(name), [name])
+  const isBatch = quantity > 1
+
+  const displayBatchResults = externalBatchResults
+
   function handleNameChange(e) {
     const val = e.target.value.toLowerCase().replace(/\s/g, '_')
     setName(val)
     setNameError(val && !isValidName(val) ? 'Apenas letras minúsculas, números e _' : '')
+  }
+
+  function handleQuantityChange(e) {
+    const val = e.target.value
+    const n = parseInt(val, 10)
+    setQuantity(val === '' ? '' : n)
+    if (val === '' || isNaN(n) || n < 1 || n > 50) {
+      setQuantityError('Entre 1 e 50')
+    } else {
+      setQuantityError('')
+    }
   }
 
   function handleVarExample(idx, value) {
@@ -152,6 +172,11 @@ export default function TemplateForm({ wabas = [], onSubmit, onCancel, submittin
     e.preventDefault()
     if (!isValidName(name)) { setNameError('Nome inválido'); return }
     if (!wabaId) return
+    if (isBatch && !nameEndsWithNumber) {
+      setNameError('Para criar em lote, o nome deve terminar com um número (ex: cobranca_0)')
+      return
+    }
+    if (isBatch && quantityError) return
 
     const components = buildComponents({
       headerType, headerText, headerMediaUrl,
@@ -160,10 +185,22 @@ export default function TemplateForm({ wabas = [], onSubmit, onCancel, submittin
       buttons,
     })
 
-    onSubmit({ waba_id: wabaId, name, category, language, components })
+    if (isBatch && onBatchSubmit) {
+      onBatchSubmit({
+        waba_id: wabaId,
+        name_base: name,
+        count: Number(quantity),
+        category,
+        language,
+        components,
+      })
+    } else {
+      onSubmit({ waba_id: wabaId, name, category, language, components })
+    }
   }
 
-  const canSubmit = name && !nameError && wabaId && bodyText.trim() && !submitting
+  const quantityValid = !isBatch || (nameEndsWithNumber && !quantityError && Number(quantity) >= 1 && Number(quantity) <= 50)
+  const canSubmit = name && !nameError && wabaId && bodyText.trim() && !submitting && quantityValid
 
   // Build preview components for the bubble
   const previewHeader  = headerType === 'TEXT' ? headerText : headerType !== 'none' ? headerType : null
@@ -197,6 +234,39 @@ export default function TemplateForm({ wabas = [], onSubmit, onCancel, submittin
               {wabas.map(w => <option key={w.waba_id} value={w.waba_id}>{w.name || w.waba_id}</option>)}
             </select>
           </div>
+        </div>
+
+        {/* ── Quantity (batch) ── */}
+        <div className="tf-row tf-row--2" style={{ marginTop: 14 }}>
+          <div className="tf-field">
+            <label className="tf-label">
+              Quantidade de templates
+              <span className="tf-hint">cria N templates incrementando o número final do nome</span>
+            </label>
+            <input
+              type="number"
+              className={`tf-input${quantityError ? ' tf-input--err' : ''}`}
+              value={quantity}
+              onChange={handleQuantityChange}
+              min={1}
+              max={50}
+              disabled={submitting}
+            />
+            {quantityError && <span className="tf-err">{quantityError}</span>}
+            {isBatch && !nameEndsWithNumber && name && (
+              <span className="tf-err">O nome deve terminar com um número para criar em lote (ex: cobranca_0)</span>
+            )}
+            {isBatch && nameEndsWithNumber && name && !nameError && (
+              <span className="tf-batch-preview">
+                Serão criados: {Array.from({ length: Math.min(Number(quantity) || 0, 3) }, (_, i) => {
+                  const m = name.match(/^(.*?)(\d+)$/)
+                  if (!m) return null
+                  return `${m[1]}${parseInt(m[2], 10) + i + 1}`
+                }).filter(Boolean).join(', ')}{Number(quantity) > 3 ? ` … (+${Number(quantity) - 3} mais)` : ''}
+              </span>
+            )}
+          </div>
+          <div /> {/* spacer */}
         </div>
 
         {/* ── Category + Language ── */}
@@ -476,13 +546,41 @@ export default function TemplateForm({ wabas = [], onSubmit, onCancel, submittin
         {/* ── Error banner ── */}
         {error && <div className="tf-error-banner">{error}</div>}
 
+        {/* ── Batch results ── */}
+        {displayBatchResults && (
+          <div className="tf-batch-results">
+            <div className="tf-batch-results-title">
+              <IconBatch />
+              Resultado da criação em lote
+              <span className="tf-batch-summary">
+                {displayBatchResults.filter(r => !r.error).length}/{displayBatchResults.length} criados com sucesso
+              </span>
+            </div>
+            <div className="tf-batch-list">
+              {displayBatchResults.map((r, i) => (
+                <div key={i} className={`tf-batch-row${r.error ? ' tf-batch-row--err' : ' tf-batch-row--ok'}`}>
+                  <span className="tf-batch-icon">{r.error ? '✕' : '✓'}</span>
+                  <span className="tf-batch-name">{r.name}</span>
+                  {r.error
+                    ? <span className="tf-batch-msg">{r.error}</span>
+                    : <span className="tf-batch-status">{r.status}</span>
+                  }
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ── Actions ── */}
         <div className="tf-actions">
           <button type="button" className="tf-btn tf-btn--secondary" onClick={onCancel} disabled={submitting}>
             Cancelar
           </button>
           <button type="submit" className="tf-btn tf-btn--primary" disabled={!canSubmit}>
-            {submitting ? <><span className="tf-spinner" /> Criando…</> : <><IconSend /> Criar template</>}
+            {submitting
+              ? <><span className="tf-spinner" /> {isBatch ? `Criando ${quantity} templates…` : 'Criando…'}</>
+              : <><IconSend /> {isBatch ? `Criar ${quantity} templates` : 'Criar template'}</>
+            }
           </button>
         </div>
 
@@ -492,6 +590,17 @@ export default function TemplateForm({ wabas = [], onSubmit, onCancel, submittin
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
+
+function IconBatch() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="1" y="1" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+      <rect x="9" y="1" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+      <rect x="1" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+      <rect x="9" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.4"/>
+    </svg>
+  )
+}
 
 function IconVar() {
   return (
@@ -859,4 +968,85 @@ const CSS = `
     display: inline-block;
   }
   @keyframes tf-spin { to { transform: rotate(360deg); } }
+
+  /* ── Batch preview hint ── */
+  .tf-batch-preview {
+    font-size: 11px;
+    color: #86efac;
+    font-family: 'JetBrains Mono', monospace;
+    margin-top: 2px;
+  }
+
+  /* ── Batch results panel ── */
+  .tf-batch-results {
+    margin-top: 16px;
+    background: #0f1215;
+    border: 1px solid #1a1f28;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .tf-batch-results-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: #e8edf5;
+    background: #141820;
+    border-bottom: 1px solid #1a1f28;
+  }
+  .tf-batch-summary {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: 400;
+    color: #4a5568;
+  }
+  .tf-batch-list {
+    display: flex;
+    flex-direction: column;
+  }
+  .tf-batch-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 16px;
+    border-bottom: 1px solid #1a1f2860;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+  }
+  .tf-batch-row:last-child { border-bottom: none; }
+  .tf-batch-row--ok { background: #22c55e06; }
+  .tf-batch-row--err { background: #ef444406; }
+  .tf-batch-icon {
+    font-size: 11px;
+    font-weight: 700;
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .tf-batch-row--ok .tf-batch-icon { color: #22c55e; }
+  .tf-batch-row--err .tf-batch-icon { color: #ef4444; }
+  .tf-batch-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: #e8edf5;
+    flex-shrink: 0;
+    min-width: 160px;
+  }
+  .tf-batch-status {
+    font-size: 11px;
+    color: #4a7c59;
+    background: #22c55e15;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  .tf-batch-msg {
+    font-size: 11px;
+    color: #fca5a5;
+    flex: 1;
+    word-break: break-word;
+  }
 `

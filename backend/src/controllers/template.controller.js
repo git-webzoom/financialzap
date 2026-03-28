@@ -44,6 +44,34 @@ async function sync(req, res) {
   }
 }
 
+// POST /api/templates/batch
+// Body: { waba_id, name_base, count, category, language, components }
+async function batchCreate(req, res) {
+  const { waba_id, name_base, count, category, language, components } = req.body
+
+  if (!waba_id || !name_base || !count || !category || !language || !components) {
+    return res.status(400).json({ error: 'waba_id, name_base, count, category, language and components are required' })
+  }
+
+  const n = parseInt(count, 10)
+  if (!Number.isInteger(n) || n < 1 || n > 50) {
+    return res.status(400).json({ error: 'count deve ser um número inteiro entre 1 e 50' })
+  }
+
+  try {
+    const result = await templateService.batchCreateTemplates(req.user.sub, waba_id, {
+      nameBase: name_base,
+      count: n,
+      category,
+      language,
+      components,
+    })
+    res.status(201).json(result)
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message })
+  }
+}
+
 // DELETE /api/templates/:wabaId/:templateId
 async function remove(req, res) {
   try {
@@ -54,4 +82,4 @@ async function remove(req, res) {
   }
 }
 
-module.exports = { list, create, sync, remove }
+module.exports = { list, create, batchCreate, sync, remove }

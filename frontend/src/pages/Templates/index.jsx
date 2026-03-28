@@ -95,7 +95,7 @@ const COLS = [
 ]
 
 export default function Templates() {
-  const { templates, loading, syncing, error, load, create, sync, remove } = useTemplates()
+  const { templates, loading, syncing, error, load, create, sync, remove, batchCreate } = useTemplates()
   const { groups, load: loadWabas } = useWabas()
 
   const wabas = useMemo(() => groups.flatMap(g => g.wabas), [groups])
@@ -230,6 +230,23 @@ export default function Templates() {
     }
   }
 
+  const [batchResults, setBatchResults] = useState(null)
+
+  async function handleBatchCreate(payload) {
+    setSubmitting(true)
+    setFormError('')
+    setBatchResults(null)
+    try {
+      const { results } = await batchCreate(payload)
+      setBatchResults(results)
+      await load(filterWabaId || null)
+    } catch (err) {
+      setFormError(err.response?.data?.error || err.message || 'Erro ao criar templates em lote')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const allChecked = visible.length > 0 && selected.size === visible.length
   const someChecked = selected.size > 0 && selected.size < visible.length
 
@@ -288,16 +305,18 @@ export default function Templates() {
           <div className="tp-form-panel">
             <div className="tp-form-header">
               <h2 className="tp-form-title">Novo template</h2>
-              <button className="tp-close-btn" onClick={() => setShowForm(false)} disabled={submitting}>
+              <button className="tp-close-btn" onClick={() => { setShowForm(false); setBatchResults(null) }} disabled={submitting}>
                 <IconClose />
               </button>
             </div>
             <TemplateForm
               wabas={wabas}
               onSubmit={handleCreate}
-              onCancel={() => setShowForm(false)}
+              onBatchSubmit={handleBatchCreate}
+              onCancel={() => { setShowForm(false); setBatchResults(null) }}
               submitting={submitting}
               error={formError}
+              externalBatchResults={batchResults}
             />
           </div>
         )}

@@ -44,5 +44,10 @@ export function useTemplates() {
     await templateService.deleteTemplate(wabaId, templateId)
   }, [])
 
-  return { templates, loading, syncing, error, load, create, sync, remove }
+  const batchCreate = useCallback(async (payload) => {
+    const data = await templateService.batchCreateTemplates(payload)
+    return data // { results: [{ name, template_id, status, error }] }
+  }, [])
+
+  return { templates, loading, syncing, error, load, create, sync, remove, batchCreate }
 }

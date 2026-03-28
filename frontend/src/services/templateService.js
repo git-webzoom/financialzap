@@ -20,6 +20,12 @@ export async function syncTemplates(wabaId) {
   return data // { ok, templates_synced }
 }
 
+// POST /api/templates/batch — creates N templates with incrementing name suffix
+export async function batchCreateTemplates(payload) {
+  const { data } = await api.post('/api/templates/batch', payload)
+  return data // { results: [{ name, template_id, status, error }] }
+}
+
 // DELETE /api/templates/:wabaId/:templateId — deletes from Meta and local DB
 export async function deleteTemplate(wabaId, templateId) {
   const { data } = await api.delete(`/api/templates/${wabaId}/${templateId}`)
