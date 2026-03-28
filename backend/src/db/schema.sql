@@ -60,19 +60,23 @@ CREATE INDEX IF NOT EXISTS idx_phone_numbers_waba_id ON phone_numbers(waba_id);
 -- last_sync_at: atualizado a cada sincronização — exibido no painel como
 --   "Última sincronização: há X horas".
 CREATE TABLE IF NOT EXISTS templates (
-  id           INTEGER PRIMARY KEY AUTOINCREMENT,
-  waba_id      TEXT NOT NULL,
-  template_id  TEXT NOT NULL,
-  name         TEXT NOT NULL,
-  status       TEXT,           -- APPROVED | PENDING | REJECTED
-  category     TEXT,           -- MARKETING | UTILITY | AUTHENTICATION
-  language     TEXT,
-  structure    TEXT,           -- JSON serializado
-  last_sync_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  waba_id          TEXT NOT NULL,
+  template_id      TEXT NOT NULL,
+  name             TEXT NOT NULL,
+  status           TEXT,           -- APPROVED | PENDING | REJECTED
+  category         TEXT,           -- MARKETING | UTILITY | AUTHENTICATION
+  language         TEXT,
+  structure        TEXT,           -- JSON serializado
+  delivered_count  INTEGER,        -- total de entregas confirmadas (quality_score.metrics)
+  read_count       INTEGER,        -- total de leituras (quality_score.metrics)
+  last_edited_time DATETIME,       -- last_updated_time da Meta (Unix → ISO)
+  last_sync_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+  created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (waba_id, template_id),
   FOREIGN KEY (waba_id) REFERENCES wabas(waba_id) ON DELETE CASCADE
 );
+
 
 CREATE INDEX IF NOT EXISTS idx_templates_waba_id ON templates(waba_id);
 CREATE INDEX IF NOT EXISTS idx_templates_status  ON templates(status);

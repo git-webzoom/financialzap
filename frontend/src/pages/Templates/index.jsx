@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useTemplates } from '../../hooks/useTemplates'
 import { useWabas } from '../../hooks/useWabas'
-import TemplateCard from '../../components/Templates/TemplateCard'
 import TemplateForm from '../../components/Templates/TemplateForm'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -18,30 +17,84 @@ function formatRelativeSync(isoDate) {
   return `há ${days} dia${days !== 1 ? 's' : ''}`
 }
 
+function formatDatePT(isoDate) {
+  if (!isoDate) return '—'
+  try {
+    return new Date(isoDate).toLocaleDateString('pt-BR', {
+      day: '2-digit', month: 'short', year: 'numeric',
+    })
+  } catch {
+    return '—'
+  }
+}
+
+const CATEGORY_LABELS = {
+  MARKETING:      'Marketing',
+  UTILITY:        'Utilidade',
+  AUTHENTICATION: 'Autenticação',
+}
+
+const STATUS_CONFIG = {
+  APPROVED: { label: 'Ativo — Qualidade p…', color: '#22c55e', bg: '#22c55e18', border: '#22c55e35' },
+  PENDING:  { label: 'Pendente',             color: '#f59e0b', bg: '#f59e0b18', border: '#f59e0b35' },
+  REJECTED: { label: 'Rejeitado',            color: '#ef4444', bg: '#ef444418', border: '#ef444435' },
+}
+
+function StatusBadge({ status }) {
+  const cfg = STATUS_CONFIG[status?.toUpperCase()] ?? { label: status || '—', color: '#8a94a6', bg: '#8a94a615', border: '#8a94a630' }
+  return (
+    <span
+      className="tbl-badge"
+      style={{ color: cfg.color, background: cfg.bg, borderColor: cfg.border }}
+    >
+      <span className="tbl-dot" style={{ background: cfg.color }} />
+      {cfg.label}
+    </span>
+  )
+}
+
+function SortIcon({ active, dir }) {
+  return (
+    <span className={`tbl-sort-icon${active ? ' tbl-sort-icon--active' : ''}`}>
+      {active && dir === 'asc' ? '↑' : active && dir === 'desc' ? '↓' : '↑↓'}
+    </span>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
+
+const COLS = [
+  { key: 'name',             label: 'Nome do modelo' },
+  { key: 'category',         label: 'Categoria' },
+  { key: 'language',         label: 'Idioma' },
+  { key: 'status',           label: 'Status' },
+  { key: 'delivered_count',  label: 'Mensagens entregues' },
+  { key: 'read_rate',        label: 'Taxa de leitura' },
+  { key: 'last_edited_time', label: 'Última edição' },
+]
 
 export default function Templates() {
   const { templates, loading, syncing, error, load, create, sync } = useTemplates()
   const { groups, load: loadWabas } = useWabas()
 
-  // Flat list of wabas for selects
   const wabas = useMemo(() => groups.flatMap(g => g.wabas), [groups])
 
   const [filterWabaId,  setFilterWabaId]  = useState('')
   const [showForm,      setShowForm]      = useState(false)
   const [submitting,    setSubmitting]    = useState(false)
   const [formError,     setFormError]     = useState('')
-  const [syncFeedback,  setSyncFeedback]  = useState({}) // { wabaId: 'ok' | 'error msg' }
+  const [syncFeedback,  setSyncFeedback]  = useState({})
   const [globalSyncing, setGlobalSyncing] = useState(false)
   const [statusFilter,  setStatusFilter]  = useState('ALL')
+  const [selected,      setSelected]      = useState(new Set())
+  const [sortKey,       setSortKey]       = useState('last_edited_time')
+  const [sortDir,       setSortDir]       = useState('desc')
 
-  // Load wabas once (for filter dropdown + form)
   useEffect(() => { loadWabas() }, [loadWabas])
-
-  // Load templates when filter changes
   useEffect(() => { load(filterWabaId || null) }, [load, filterWabaId])
+  // Reset selection when data changes
+  useEffect(() => { setSelected(new Set()) }, [templates])
 
-  // Most recent last_sync_at across visible templates
   const lastSync = useMemo(() => {
     if (!templates.length) return null
     const dates = templates.map(t => t.last_sync_at).filter(Boolean)
@@ -49,13 +102,6 @@ export default function Templates() {
     return dates.reduce((latest, d) => (d > latest ? d : latest))
   }, [templates])
 
-  // Apply status filter client-side
-  const visible = useMemo(() => {
-    if (statusFilter === 'ALL') return templates
-    return templates.filter(t => t.status?.toUpperCase() === statusFilter)
-  }, [templates, statusFilter])
-
-  // Status counters
   const counts = useMemo(() => {
     const c = { ALL: templates.length, APPROVED: 0, PENDING: 0, REJECTED: 0 }
     for (const t of templates) {
@@ -65,16 +111,60 @@ export default function Templates() {
     return c
   }, [templates])
 
-  async function handleSync() {
-    // Sync all WABAs currently visible (or all if no filter)
-    const targetWabas = filterWabaId
-      ? [filterWabaId]
-      : wabas.map(w => w.waba_id)
+  const filtered = useMemo(() => {
+    if (statusFilter === 'ALL') return templates
+    return templates.filter(t => t.status?.toUpperCase() === statusFilter)
+  }, [templates, statusFilter])
 
+  const visible = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      let va = a[sortKey] ?? ''
+      let vb = b[sortKey] ?? ''
+      // numeric sort for counts
+      if (sortKey === 'delivered_count' || sortKey === 'read_rate') {
+        va = Number(va) || 0
+        vb = Number(vb) || 0
+        return sortDir === 'asc' ? va - vb : vb - va
+      }
+      va = String(va).toLowerCase()
+      vb = String(vb).toLowerCase()
+      if (va < vb) return sortDir === 'asc' ? -1 : 1
+      if (va > vb) return sortDir === 'asc' ? 1 : -1
+      return 0
+    })
+  }, [filtered, sortKey, sortDir])
+
+  function handleSort(key) {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
+
+  function toggleAll() {
+    if (selected.size === visible.length) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(visible.map(t => `${t.waba_id}:${t.template_id}`)))
+    }
+  }
+
+  function toggleOne(id) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function handleSync() {
+    const targetWabas = filterWabaId ? [filterWabaId] : wabas.map(w => w.waba_id)
     if (!targetWabas.length) return
     setGlobalSyncing(true)
     setSyncFeedback({})
-
     for (const wid of targetWabas) {
       try {
         const r = await sync(wid)
@@ -83,8 +173,6 @@ export default function Templates() {
         setSyncFeedback(prev => ({ ...prev, [wid]: `erro: ${err.message}` }))
       }
     }
-
-    // Reload after all syncs
     await load(filterWabaId || null)
     setGlobalSyncing(false)
   }
@@ -103,6 +191,9 @@ export default function Templates() {
     }
   }
 
+  const allChecked = visible.length > 0 && selected.size === visible.length
+  const someChecked = selected.size > 0 && selected.size < visible.length
+
   return (
     <>
       <style>{CSS}</style>
@@ -115,9 +206,7 @@ export default function Templates() {
             <p className="tp-sub">
               {loading ? 'Carregando…' : `${counts.ALL} template${counts.ALL !== 1 ? 's' : ''}`}
               {lastSync && (
-                <span className="tp-sync-info">
-                  · Última sincronização: {formatRelativeSync(lastSync)}
-                </span>
+                <span className="tp-sync-info"> · Última sincronização: {formatRelativeSync(lastSync)}</span>
               )}
             </p>
           </div>
@@ -132,7 +221,6 @@ export default function Templates() {
               <span className={globalSyncing || syncing ? 'tp-spin' : ''}><IconRefresh /></span>
               {globalSyncing || syncing ? 'Sincronizando…' : 'Sincronizar'}
             </button>
-
             <button
               className="tp-btn tp-btn--primary"
               onClick={() => { setShowForm(true); setFormError('') }}
@@ -143,10 +231,8 @@ export default function Templates() {
           </div>
         </div>
 
-        {/* ── Global error ── */}
+        {/* ── Banners ── */}
         {error && <div className="tp-banner tp-banner--err">⚠ {error}</div>}
-
-        {/* ── Sync feedback ── */}
         {Object.keys(syncFeedback).length > 0 && (
           <div className="tp-banner tp-banner--ok">
             {Object.entries(syncFeedback).map(([wid, msg]) => (
@@ -158,7 +244,7 @@ export default function Templates() {
           </div>
         )}
 
-        {/* ── Create form (inline panel) ── */}
+        {/* ── Create form ── */}
         {showForm && (
           <div className="tp-form-panel">
             <div className="tp-form-header">
@@ -179,7 +265,6 @@ export default function Templates() {
 
         {/* ── Filters ── */}
         <div className="tp-filters">
-          {/* WABA filter */}
           <select
             className="tp-select"
             value={filterWabaId}
@@ -188,13 +273,10 @@ export default function Templates() {
           >
             <option value="">Todas as WABAs</option>
             {wabas.map(w => (
-              <option key={w.waba_id} value={w.waba_id}>
-                {w.name || w.waba_id}
-              </option>
+              <option key={w.waba_id} value={w.waba_id}>{w.name || w.waba_id}</option>
             ))}
           </select>
 
-          {/* Status tabs */}
           <div className="tp-status-tabs">
             {['ALL', 'APPROVED', 'PENDING', 'REJECTED'].map(s => (
               <button
@@ -202,7 +284,7 @@ export default function Templates() {
                 className={`tp-tab${statusFilter === s ? ' tp-tab--active' : ''}`}
                 onClick={() => setStatusFilter(s)}
               >
-                {STATUS_LABELS[s]}
+                {STATUS_TAB_LABELS[s]}
                 <span className="tp-tab-count">{counts[s]}</span>
               </button>
             ))}
@@ -211,16 +293,84 @@ export default function Templates() {
 
         {/* ── Content ── */}
         {loading ? (
-          <div className="tp-loading">
-            <span className="tp-spinner" /> Carregando templates…
-          </div>
+          <div className="tp-loading"><span className="tp-spinner" /> Carregando templates…</div>
         ) : visible.length === 0 ? (
           <EmptyState hasFilter={statusFilter !== 'ALL' || !!filterWabaId} />
         ) : (
-          <div className="tp-grid">
-            {visible.map(t => (
-              <TemplateCard key={`${t.waba_id}-${t.template_id}`} template={t} />
-            ))}
+          <div className="tbl-wrap">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th className="tbl-th tbl-th--check">
+                    <input
+                      type="checkbox"
+                      className="tbl-checkbox"
+                      checked={allChecked}
+                      ref={el => { if (el) el.indeterminate = someChecked }}
+                      onChange={toggleAll}
+                    />
+                  </th>
+                  {COLS.map(col => (
+                    <th
+                      key={col.key}
+                      className="tbl-th tbl-th--sortable"
+                      onClick={() => handleSort(col.key)}
+                    >
+                      {col.label}
+                      <SortIcon active={sortKey === col.key} dir={sortDir} />
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map(t => {
+                  const rowId = `${t.waba_id}:${t.template_id}`
+                  const isChecked = selected.has(rowId)
+                  const readRate = (t.delivered_count && t.read_count)
+                    ? `${Math.round((t.read_count / t.delivered_count) * 100)}% (${t.read_count})`
+                    : t.read_count
+                      ? `— (${t.read_count})`
+                      : '—'
+
+                  return (
+                    <tr key={rowId} className={`tbl-row${isChecked ? ' tbl-row--selected' : ''}`}>
+                      <td className="tbl-td tbl-td--check">
+                        <input
+                          type="checkbox"
+                          className="tbl-checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleOne(rowId)}
+                        />
+                      </td>
+                      <td className="tbl-td tbl-td--name">
+                        <span className="tbl-name">{t.name}</span>
+                        {t.structure?.find?.(c => c.type === 'BODY')?.text && (
+                          <span className="tbl-preview">
+                            {t.structure.find(c => c.type === 'BODY').text.slice(0, 60)}…
+                          </span>
+                        )}
+                      </td>
+                      <td className="tbl-td">{CATEGORY_LABELS[t.category] || t.category || '—'}</td>
+                      <td className="tbl-td">{t.language || '—'}</td>
+                      <td className="tbl-td"><StatusBadge status={t.status} /></td>
+                      <td className="tbl-td tbl-td--num">{t.delivered_count ?? '—'}</td>
+                      <td className="tbl-td tbl-td--num">{readRate}</td>
+                      <td className="tbl-td tbl-td--date">{formatDatePT(t.last_edited_time)}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* ── Selection bar ── */}
+        {selected.size > 0 && (
+          <div className="tp-sel-bar">
+            <span>{selected.size} selecionado{selected.size !== 1 ? 's' : ''}</span>
+            <button className="tp-sel-clear" onClick={() => setSelected(new Set())}>
+              Limpar seleção
+            </button>
           </div>
         )}
       </div>
@@ -248,7 +398,7 @@ function EmptyState({ hasFilter }) {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const STATUS_LABELS = {
+const STATUS_TAB_LABELS = {
   ALL:      'Todos',
   APPROVED: 'Aprovados',
   PENDING:  'Pendentes',
@@ -302,9 +452,7 @@ const CSS = `
     gap: 16px;
     flex-wrap: wrap;
   }
-
   .tp-title-wrap { display: flex; flex-direction: column; gap: 4px; }
-
   .tp-title {
     font-family: 'DM Sans', sans-serif;
     font-size: 22px;
@@ -312,17 +460,12 @@ const CSS = `
     color: #e8edf5;
     letter-spacing: -0.3px;
   }
-
   .tp-sub {
     font-size: 13px;
     color: #4a5568;
     font-family: 'DM Sans', sans-serif;
   }
-
-  .tp-sync-info {
-    color: #374151;
-  }
-
+  .tp-sync-info { color: #374151; }
   .tp-header-actions {
     display: flex;
     gap: 10px;
@@ -346,21 +489,10 @@ const CSS = `
     white-space: nowrap;
   }
   .tp-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-
-  .tp-btn--primary {
-    background: #22c55e;
-    color: #0a0c0f;
-    border-color: transparent;
-  }
+  .tp-btn--primary { background: #22c55e; color: #0a0c0f; }
   .tp-btn--primary:hover:not(:disabled) { background: #16a34a; }
-
-  .tp-btn--sync {
-    background: #1a1f28;
-    border-color: #252c38;
-    color: #8a94a6;
-  }
+  .tp-btn--sync { background: #1a1f28; border-color: #252c38; color: #8a94a6; }
   .tp-btn--sync:hover:not(:disabled) { background: #252c38; color: #e8edf5; }
-
   .tp-spin { display: flex; animation: tp-rotate 0.8s linear infinite; }
   @keyframes tp-rotate { to { transform: rotate(360deg); } }
 
@@ -376,12 +508,7 @@ const CSS = `
   }
   .tp-banner--ok  { background: #22c55e12; border: 1px solid #22c55e30; color: #86efac; }
   .tp-banner--err { background: #ef444412; border: 1px solid #ef444430; color: #fca5a5; }
-
-  .tp-sync-waba {
-    font-weight: 600;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-  }
+  .tp-sync-waba { font-weight: 600; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
 
   /* ── Form panel ── */
   .tp-form-panel {
@@ -393,20 +520,8 @@ const CSS = `
     flex-direction: column;
     gap: 20px;
   }
-
-  .tp-form-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .tp-form-title {
-    font-family: 'DM Sans', sans-serif;
-    font-size: 16px;
-    font-weight: 600;
-    color: #e8edf5;
-  }
-
+  .tp-form-header { display: flex; align-items: center; justify-content: space-between; }
+  .tp-form-title { font-family: 'DM Sans', sans-serif; font-size: 16px; font-weight: 600; color: #e8edf5; }
   .tp-close-btn {
     width: 28px; height: 28px;
     display: flex; align-items: center; justify-content: center;
@@ -420,13 +535,7 @@ const CSS = `
   .tp-close-btn:hover:not(:disabled) { color: #e8edf5; background: #252c38; }
 
   /* ── Filters ── */
-  .tp-filters {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    flex-wrap: wrap;
-  }
-
+  .tp-filters { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
   .tp-select {
     background: #1a1f28;
     border: 1px solid #252c38;
@@ -445,7 +554,6 @@ const CSS = `
   }
   .tp-select:focus { border-color: #374151; }
   .tp-select option { background: #1a1f28; }
-
   .tp-status-tabs {
     display: flex;
     gap: 4px;
@@ -454,7 +562,6 @@ const CSS = `
     border-radius: 9px;
     padding: 3px;
   }
-
   .tp-tab {
     display: inline-flex;
     align-items: center;
@@ -472,11 +579,7 @@ const CSS = `
     white-space: nowrap;
   }
   .tp-tab:hover:not(.tp-tab--active) { color: #8a94a6; }
-  .tp-tab--active {
-    background: #252c38;
-    color: #e8edf5;
-  }
-
+  .tp-tab--active { background: #252c38; color: #e8edf5; }
   .tp-tab-count {
     background: #1a1f28;
     color: #4a5568;
@@ -487,7 +590,7 @@ const CSS = `
   }
   .tp-tab--active .tp-tab-count { background: #374151; color: #8a94a6; }
 
-  /* ── Loading ── */
+  /* ── Loading / empty ── */
   .tp-loading {
     display: flex;
     align-items: center;
@@ -504,15 +607,6 @@ const CSS = `
     border-radius: 50%;
     animation: tp-rotate 0.8s linear infinite;
   }
-
-  /* ── Grid ── */
-  .tp-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  /* ── Empty state ── */
   .tp-empty {
     display: flex;
     flex-direction: column;
@@ -521,7 +615,6 @@ const CSS = `
     padding: 64px 24px;
     text-align: center;
   }
-
   .tp-empty-icon {
     width: 72px; height: 72px;
     display: flex; align-items: center; justify-content: center;
@@ -529,19 +622,140 @@ const CSS = `
     border: 1px solid #22c55e20;
     border-radius: 50%;
   }
+  .tp-empty-title { font-family: 'DM Sans', sans-serif; font-size: 17px; font-weight: 600; color: #8a94a6; }
+  .tp-empty-sub { font-size: 13px; color: #4a5568; font-family: 'DM Sans', sans-serif; max-width: 380px; line-height: 1.6; }
 
-  .tp-empty-title {
+  /* ── Table ── */
+  .tbl-wrap {
+    width: 100%;
+    overflow-x: auto;
+    border-radius: 10px;
+    border: 1px solid #1a1f28;
+  }
+  .tbl-wrap::-webkit-scrollbar { height: 4px; }
+  .tbl-wrap::-webkit-scrollbar-track { background: transparent; }
+  .tbl-wrap::-webkit-scrollbar-thumb { background: #252c38; border-radius: 2px; }
+
+  .tbl {
+    width: 100%;
+    border-collapse: collapse;
     font-family: 'DM Sans', sans-serif;
-    font-size: 17px;
-    font-weight: 600;
-    color: #8a94a6;
+    font-size: 13px;
+    min-width: 760px;
   }
 
-  .tp-empty-sub {
+  .tbl-th {
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 600;
+    color: #4a5568;
+    background: #0f1215;
+    border-bottom: 1px solid #1a1f28;
+    white-space: nowrap;
+    user-select: none;
+  }
+  .tbl-th--check { width: 40px; padding: 10px 12px; }
+  .tbl-th--sortable { cursor: pointer; }
+  .tbl-th--sortable:hover { color: #8a94a6; }
+
+  .tbl-sort-icon {
+    margin-left: 5px;
+    font-size: 10px;
+    color: #2d3748;
+    font-style: normal;
+  }
+  .tbl-sort-icon--active { color: #22c55e; }
+
+  .tbl-row {
+    border-bottom: 1px solid #111519;
+    transition: background 0.1s;
+  }
+  .tbl-row:last-child { border-bottom: none; }
+  .tbl-row:hover { background: #131720; }
+  .tbl-row--selected { background: #22c55e08; }
+  .tbl-row--selected:hover { background: #22c55e10; }
+
+  .tbl-td {
+    padding: 12px 14px;
+    color: #8a94a6;
+    vertical-align: middle;
+    background: #0c0f13;
+  }
+  .tbl-td--check { width: 40px; padding: 12px 12px; background: #0c0f13; }
+  .tbl-td--num { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .tbl-td--date { white-space: nowrap; font-size: 12px; color: #4a5568; }
+
+  .tbl-name {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: #e8edf5;
+    font-weight: 500;
+  }
+  .tbl-preview {
+    display: block;
+    font-size: 11px;
+    color: #374151;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 240px;
+  }
+
+  .tbl-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 100px;
+    border: 1px solid;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .tbl-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .tbl-checkbox {
+    width: 14px;
+    height: 14px;
+    accent-color: #22c55e;
+    cursor: pointer;
+  }
+
+  /* ── Selection bar ── */
+  .tp-sel-bar {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: #1a1f28;
+    border: 1px solid #374151;
+    border-radius: 10px;
+    padding: 10px 20px;
     font-size: 13px;
+    font-family: 'DM Sans', sans-serif;
+    color: #e8edf5;
+    box-shadow: 0 8px 24px #00000060;
+    z-index: 100;
+  }
+  .tp-sel-clear {
+    background: none;
+    border: none;
     color: #4a5568;
     font-family: 'DM Sans', sans-serif;
-    max-width: 380px;
-    line-height: 1.6;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0;
+    transition: color 0.15s;
   }
+  .tp-sel-clear:hover { color: #8a94a6; }
 `

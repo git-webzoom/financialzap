@@ -57,7 +57,7 @@ async function getPhoneNumberInfo(phoneNumberId, accessToken) {
 async function getTemplates(wabaId, accessToken) {
   const templates = []
   let params = {
-    fields: 'id,name,status,category,language,components',
+    fields: 'id,name,status,category,language,components,quality_score,last_updated_time',
     limit: 100,
     access_token: accessToken,
   }
