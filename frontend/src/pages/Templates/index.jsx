@@ -1,7 +1,8 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useTemplates } from '../../hooks/useTemplates'
 import { useWabas } from '../../hooks/useWabas'
 import TemplateForm from '../../components/Templates/TemplateForm'
+import * as wabaService from '../../services/wabaService'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -95,7 +96,7 @@ const COLS = [
 ]
 
 export default function Templates() {
-  const { templates, loading, syncing, error, load, create, sync, remove, batchCreate } = useTemplates()
+  const { templates, loading, syncing, error, load, create, sync, remove, batchCreate, sendTest } = useTemplates()
   const { groups, load: loadWabas } = useWabas()
 
   const wabas = useMemo(() => groups.flatMap(g => g.wabas), [groups])
@@ -113,6 +114,7 @@ export default function Templates() {
   const [detailTemplate, setDetailTemplate] = useState(null) // template aberto no modal
   const [deleting,       setDeleting]       = useState(false)
   const [deleteError,    setDeleteError]    = useState('')
+  const [testTemplate,   setTestTemplate]   = useState(null)  // template being tested
 
   useEffect(() => { loadWabas() }, [loadWabas])
   useEffect(() => { load(filterWabaId || null) }, [load, filterWabaId])
@@ -247,6 +249,10 @@ export default function Templates() {
     }
   }
 
+  const handleSendTest = useCallback(async (templateId, payload) => {
+    return sendTest(templateId, payload)
+  }, [sendTest])
+
   const allChecked = visible.length > 0 && selected.size === visible.length
   const someChecked = selected.size > 0 && selected.size < visible.length
 
@@ -378,6 +384,7 @@ export default function Templates() {
                       <SortIcon active={sortKey === col.key} dir={sortDir} />
                     </th>
                   ))}
+                  <th className="tbl-th tbl-th--actions" />
                 </tr>
               </thead>
               <tbody>
@@ -413,6 +420,15 @@ export default function Templates() {
                       <td className="tbl-td"><QualityBadge score={t.quality_score} /></td>
                       <td className="tbl-td tbl-td--rejected">{t.rejected_reason || '—'}</td>
                       <td className="tbl-td tbl-td--date">{formatDatePT(t.last_sync_at)}</td>
+                      <td className="tbl-td tbl-td--actions" onClick={e => e.stopPropagation()}>
+                        <button
+                          className="tbl-action-btn"
+                          title="Enviar teste"
+                          onClick={() => setTestTemplate(t)}
+                        >
+                          <IconBeaker />
+                        </button>
+                      </td>
                     </tr>
                   )
                 })}
@@ -429,6 +445,16 @@ export default function Templates() {
             onDelete={handleDelete}
             deleting={deleting}
             deleteError={deleteError}
+          />
+        )}
+
+        {/* ── Test send modal ── */}
+        {testTemplate && (
+          <TestModal
+            template={testTemplate}
+            wabas={wabas}
+            onClose={() => setTestTemplate(null)}
+            onSend={handleSendTest}
           />
         )}
 
@@ -617,6 +643,231 @@ function IconTemplate() {
       <rect x="3" y="3" width="18" height="18" rx="3" stroke="#22c55e" strokeWidth="1.5"/>
       <path d="M3 8h18M8 8v13" stroke="#22c55e" strokeWidth="1.3"/>
     </svg>
+  )
+}
+
+function IconBeaker() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M6 1v6L2 13a1 1 0 00.9 1.5h10.2A1 1 0 0014 13L10 7V1" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M5 1h6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+      <circle cx="6" cy="11" r="1" fill="currentColor"/>
+    </svg>
+  )
+}
+
+function IconSend() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M14 2L1 7l5 3 2 5 6-13z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
+      <path d="M6 10l4-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
+// ─── Test send modal ──────────────────────────────────────────────────────────
+
+function TestModal({ template: t, wabas, onClose, onSend }) {
+  const structure = Array.isArray(t.structure) ? t.structure : []
+  const bodyComp  = structure.find(c => c.type === 'BODY')
+  const headerComp = structure.find(c => c.type === 'HEADER')
+  const hasMedia   = headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format)
+
+  // Extract variable indices from body text e.g. {{1}}, {{2}}
+  const varIndices = useMemo(() => {
+    if (!bodyComp?.text) return []
+    const matches = [...bodyComp.text.matchAll(/\{\{(\d+)\}\}/g)]
+    const unique = [...new Set(matches.map(m => Number(m[1])))]
+    return unique.sort((a, b) => a - b)
+  }, [bodyComp])
+
+  const [to,           setTo]           = useState('')
+  const [phoneNumId,   setPhoneNumId]   = useState('')
+  const [variables,    setVariables]    = useState({})
+  const [mediaUrl,     setMediaUrl]     = useState('')
+  const [phones,       setPhones]       = useState([])
+  const [loadingPhones, setLoadingPhones] = useState(true)
+  const [sending,      setSending]      = useState(false)
+  const [result,       setResult]       = useState(null)   // { ok, error }
+
+  // Load all phone numbers from all WABAs on mount
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoadingPhones(true)
+      const all = []
+      for (const w of wabas) {
+        try {
+          const { phone_numbers } = await wabaService.getPhoneNumbers(w.waba_id)
+          for (const p of (phone_numbers || [])) {
+            all.push({ ...p, waba_id: w.waba_id, waba_name: w.name || w.waba_id })
+          }
+        } catch {
+          // skip failed waba
+        }
+      }
+      if (!cancelled) {
+        setPhones(all)
+        if (all.length > 0) setPhoneNumId(all[0].phone_number_id)
+        setLoadingPhones(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [wabas])
+
+  function handleVar(idx, value) {
+    setVariables(prev => ({ ...prev, [String(idx)]: value }))
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setSending(true)
+    setResult(null)
+    try {
+      await onSend(t.template_id, {
+        phone_number_id: phoneNumId,
+        to: to.replace(/\D/g, ''),
+        variables,
+        media_url: mediaUrl,
+      })
+      setResult({ ok: true })
+    } catch (err) {
+      setResult({ ok: false, error: err.response?.data?.error || err.message || 'Erro desconhecido' })
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const toDigits = to.replace(/\D/g, '')
+  const canSend  = toDigits.length >= 10 && toDigits.length <= 15 && phoneNumId && !sending
+
+  function handleBackdrop(e) {
+    if (e.target === e.currentTarget) onClose()
+  }
+
+  return (
+    <div className="tdm-backdrop" onClick={handleBackdrop}>
+      <div className="tdm-panel tm-test-panel">
+        {/* Header */}
+        <div className="tdm-header">
+          <div className="tdm-title-wrap">
+            <span className="tdm-name">Enviar teste</span>
+            <span className="tm-test-tname">{t.name}</span>
+          </div>
+          <button className="tdm-close" onClick={onClose} title="Fechar"><IconClose /></button>
+        </div>
+
+        <form className="tm-test-form" onSubmit={handleSubmit} noValidate>
+
+          {/* Destination */}
+          <div className="tf-field" style={{ marginBottom: 14 }}>
+            <label className="tf-label">Número de destino</label>
+            <input
+              className="tf-input"
+              value={to}
+              onChange={e => setTo(e.target.value)}
+              placeholder="5571999990001"
+              disabled={sending}
+            />
+            <span className="tf-hint-inline">Formato internacional sem + (ex: 5571999990001)</span>
+          </div>
+
+          {/* Origin phone */}
+          <div className="tf-field" style={{ marginBottom: 14 }}>
+            <label className="tf-label">Número de origem (remetente)</label>
+            {loadingPhones ? (
+              <span className="tf-hint-inline">Carregando números…</span>
+            ) : phones.length === 0 ? (
+              <span className="tf-err">Nenhum número disponível. Sincronize uma WABA primeiro.</span>
+            ) : (
+              <select
+                className="tf-select"
+                value={phoneNumId}
+                onChange={e => setPhoneNumId(e.target.value)}
+                disabled={sending}
+              >
+                {phones.map(p => (
+                  <option key={p.phone_number_id} value={p.phone_number_id}>
+                    {p.display_phone_number} — {p.verified_name || p.waba_name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Variables */}
+          {varIndices.length > 0 && (
+            <div className="tf-var-block" style={{ marginBottom: 14 }}>
+              <p className="tf-var-title">Valores das variáveis</p>
+              <div className="tf-var-grid">
+                {varIndices.map(idx => (
+                  <div key={idx} className="tf-field">
+                    <label className="tf-label">Valor para {`{{${idx}}}`}</label>
+                    <input
+                      className="tf-input"
+                      value={variables[String(idx)] || ''}
+                      onChange={e => handleVar(idx, e.target.value)}
+                      placeholder={`valor de {{${idx}}}`}
+                      disabled={sending}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Media URL */}
+          {hasMedia && (
+            <div className="tf-field" style={{ marginBottom: 14 }}>
+              <label className="tf-label">
+                URL da mídia
+                <span className="tf-hint">
+                  {headerComp.format === 'IMAGE'    && 'Imagem (JPG/PNG)'}
+                  {headerComp.format === 'VIDEO'    && 'Vídeo (MP4)'}
+                  {headerComp.format === 'DOCUMENT' && 'Documento (PDF)'}
+                </span>
+              </label>
+              <input
+                className="tf-input"
+                value={mediaUrl}
+                onChange={e => setMediaUrl(e.target.value)}
+                placeholder={
+                  headerComp.format === 'IMAGE'    ? 'https://exemplo.com/imagem.jpg' :
+                  headerComp.format === 'VIDEO'    ? 'https://exemplo.com/video.mp4' :
+                                                     'https://exemplo.com/documento.pdf'
+                }
+                disabled={sending}
+              />
+            </div>
+          )}
+
+          {/* Result feedback */}
+          {result && (
+            <div className={`tm-test-result${result.ok ? ' tm-test-result--ok' : ' tm-test-result--err'}`}>
+              {result.ok
+                ? '✓ Mensagem enviada com sucesso! Verifique o WhatsApp do número de destino.'
+                : `✕ Erro: ${result.error}`
+              }
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="tdm-actions" style={{ paddingTop: 16 }}>
+            <button type="button" className="tp-btn tp-btn--sync" onClick={onClose} disabled={sending}>
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="tp-btn tp-btn--primary"
+              disabled={!canSend}
+            >
+              {sending ? <><span className="tp-spinner" /> Enviando…</> : <><IconSend /> Enviar teste</>}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   )
 }
 
@@ -1105,4 +1356,107 @@ const CSS = `
     gap: 10px;
     justify-content: flex-end;
   }
+
+  /* ── Table action button (test) ── */
+  .tbl-th--actions { width: 44px; padding: 0; }
+  .tbl-td--actions { width: 44px; padding: 4px 8px; text-align: center; }
+  .tbl-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: none;
+    border: 1px solid #252c38;
+    border-radius: 6px;
+    color: #4a5568;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+  .tbl-action-btn:hover { color: #22c55e; border-color: #22c55e40; background: #22c55e10; }
+
+  /* ── Shared form primitives (used by TestModal) ── */
+  .tf-field { display: flex; flex-direction: column; gap: 5px; }
+  .tf-label {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: #8a94a6;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+  }
+  .tf-hint { font-weight: 400; color: #374151; font-size: 11px; }
+  .tf-hint-inline { font-size: 11px; color: #374151; font-family: 'DM Sans', sans-serif; }
+  .tf-err { font-size: 11px; color: #fca5a5; font-family: 'DM Sans', sans-serif; }
+  .tf-input,
+  .tf-select {
+    background: #1a1f28;
+    border: 1px solid #252c38;
+    border-radius: 8px;
+    color: #e8edf5;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 9px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .tf-input:focus, .tf-select:focus { border-color: #22c55e60; }
+  .tf-input:disabled, .tf-select:disabled { opacity: 0.5; cursor: not-allowed; }
+  .tf-select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6l4 4 4-4' stroke='%234a5568' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 32px;
+  }
+  .tf-select option { background: #1a1f28; }
+  .tf-var-block {
+    background: #22c55e08;
+    border: 1px solid #22c55e20;
+    border-radius: 9px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .tf-var-title {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: #86efac;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+  }
+  .tf-var-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 10px;
+  }
+
+  /* ── Test modal specifics ── */
+  .tm-test-panel { max-width: 540px; }
+  .tm-test-tname {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #4a5568;
+    margin-left: 8px;
+  }
+  .tm-test-form { padding: 20px 24px 8px; }
+  .tm-test-result {
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: 'DM Sans', sans-serif;
+    margin-bottom: 4px;
+    line-height: 1.5;
+  }
+  .tm-test-result--ok  { background: #22c55e12; border: 1px solid #22c55e30; color: #86efac; }
+  .tm-test-result--err { background: #ef444412; border: 1px solid #ef444430; color: #fca5a5; }
 `

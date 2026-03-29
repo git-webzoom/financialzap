@@ -72,6 +72,33 @@ async function batchCreate(req, res) {
   }
 }
 
+// POST /api/templates/:templateId/test
+// Body: { phone_number_id, to, variables?, media_url? }
+async function sendTest(req, res) {
+  const { templateId } = req.params
+  const { phone_number_id, to, variables = {}, media_url = '' } = req.body
+
+  if (!phone_number_id || !to) {
+    return res.status(400).json({ error: 'phone_number_id e to são obrigatórios' })
+  }
+
+  try {
+    const result = await templateService.sendTestMessage(
+      req.user.sub,
+      templateId,
+      phone_number_id,
+      to,
+      variables,
+      media_url,
+    )
+    res.json({ ok: true, meta: result })
+  } catch (err) {
+    const status = err.status || err.response?.status || 500
+    const message = err.response?.data?.error?.message || err.message
+    res.status(status).json({ error: message })
+  }
+}
+
 // DELETE /api/templates/:wabaId/:templateId
 async function remove(req, res) {
   try {
@@ -82,4 +109,4 @@ async function remove(req, res) {
   }
 }
 
-module.exports = { list, create, batchCreate, sync, remove }
+module.exports = { list, create, batchCreate, sync, sendTest, remove }

@@ -275,6 +275,110 @@ async function deleteTemplate(userId, wabaId, templateId) {
   })
 }
 
+// ─── Send test message ────────────────────────────────────────────────────────
+
+/**
+ * Send a test message using a saved template.
+ *
+ * @param {number}  userId        - Authenticated user
+ * @param {string}  templateId    - Local template_id
+ * @param {string}  phoneNumberId - Origin phone_number_id (must belong to user)
+ * @param {string}  to            - Destination phone in E.164 without '+' (e.g. 5571999990001)
+ * @param {Object}  variables     - Map of variable index → value e.g. { "1": "João", "2": "100" }
+ * @param {string}  [mediaUrl]    - URL for media header (IMAGE/VIDEO/DOCUMENT) if applicable
+ */
+async function sendTestMessage(userId, templateId, phoneNumberId, to, variables = {}, mediaUrl = '') {
+  const db = getDb()
+
+  // Validate destination format: 10–15 digits, no '+' or spaces
+  if (!/^\d{10,15}$/.test(to)) {
+    const err = new Error('Número de destino inválido. Use o formato internacional sem +, ex: 5571999990001')
+    err.status = 400
+    throw err
+  }
+
+  // Fetch template + verify ownership via its WABA
+  const { rows: tRows } = await db.execute({
+    sql: `SELECT t.template_id, t.name, t.language, t.structure,
+                 w.access_token_enc
+          FROM templates t
+          JOIN wabas w ON w.waba_id = t.waba_id
+          WHERE t.template_id = ? AND w.user_id = ?`,
+    args: [templateId, userId],
+  })
+  if (!tRows.length) {
+    const err = new Error('Template não encontrado')
+    err.status = 404
+    throw err
+  }
+
+  const tmpl = tRows[0]
+
+  // Verify the phone_number_id belongs to the same user (via waba)
+  const { rows: pRows } = await db.execute({
+    sql: `SELECT pn.phone_number_id, w.access_token_enc AS token_enc
+          FROM phone_numbers pn
+          JOIN wabas w ON w.waba_id = pn.waba_id
+          WHERE pn.phone_number_id = ? AND w.user_id = ?`,
+    args: [phoneNumberId, userId],
+  })
+  if (!pRows.length) {
+    const err = new Error('Número de origem não encontrado ou sem permissão')
+    err.status = 403
+    throw err
+  }
+
+  // Use the token from the phone number's WABA (may differ from template's WABA token)
+  const token = wabaService.getDecryptedToken({ access_token_enc: pRows[0].token_enc })
+
+  const structure = tmpl.structure ? JSON.parse(tmpl.structure) : []
+
+  // Build template components array for the message payload
+  const components = []
+
+  // Header component — media only (text headers need no runtime value)
+  const headerComp = structure.find(c => c.type === 'HEADER')
+  if (headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format) && mediaUrl) {
+    const mediaKey = headerComp.format === 'IMAGE'    ? 'image'
+                   : headerComp.format === 'VIDEO'    ? 'video'
+                   :                                    'document'
+    components.push({
+      type: 'header',
+      parameters: [{ type: mediaKey, [mediaKey]: { link: mediaUrl } }],
+    })
+  }
+
+  // Body component — variable parameters
+  const bodyComp = structure.find(c => c.type === 'BODY')
+  if (bodyComp && Object.keys(variables).length > 0) {
+    // Sort by numeric key to preserve {{1}}, {{2}}, {{3}} order
+    const sortedVars = Object.entries(variables)
+      .filter(([, v]) => v !== undefined && v !== null)
+      .sort(([a], [b]) => Number(a) - Number(b))
+
+    if (sortedVars.length > 0) {
+      components.push({
+        type: 'body',
+        parameters: sortedVars.map(([, value]) => ({ type: 'text', text: String(value) })),
+      })
+    }
+  }
+
+  const payload = {
+    messaging_product: 'whatsapp',
+    to,
+    type: 'template',
+    template: {
+      name: tmpl.name,
+      language: { code: tmpl.language || 'pt_BR' },
+      ...(components.length > 0 && { components }),
+    },
+  }
+
+  const result = await metaService.sendMessage(phoneNumberId, token, payload)
+  return result
+}
+
 module.exports = {
   listTemplates,
   createTemplate,
@@ -282,4 +386,5 @@ module.exports = {
   deleteTemplate,
   syncByWaba,
   syncAllWabas,
+  sendTestMessage,
 }

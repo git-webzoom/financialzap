@@ -49,5 +49,10 @@ export function useTemplates() {
     return data // { results: [{ name, template_id, status, error }] }
   }, [])
 
-  return { templates, loading, syncing, error, load, create, sync, remove, batchCreate }
+  const sendTest = useCallback(async (templateId, payload) => {
+    const data = await templateService.sendTestMessage(templateId, payload)
+    return data // { ok, meta }
+  }, [])
+
+  return { templates, loading, syncing, error, load, create, sync, remove, batchCreate, sendTest }
 }

@@ -31,3 +31,10 @@ export async function deleteTemplate(wabaId, templateId) {
   const { data } = await api.delete(`/api/templates/${wabaId}/${templateId}`)
   return data // { ok }
 }
+
+// POST /api/templates/:templateId/test — send a test message via Meta Cloud API
+// payload: { phone_number_id, to, variables?, media_url? }
+export async function sendTestMessage(templateId, payload) {
+  const { data } = await api.post(`/api/templates/${templateId}/test`, payload)
+  return data // { ok, meta }
+}

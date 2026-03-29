@@ -17,6 +17,9 @@ router.post('/batch', ctrl.batchCreate)
 // Manually sync all templates for a WABA from Meta API
 router.post('/sync/:wabaId', ctrl.sync)
 
+// Send a test message using a template
+router.post('/:templateId/test', ctrl.sendTest)
+
 // Delete a template from Meta and local DB
 router.delete('/:wabaId/:templateId', ctrl.remove)
 
