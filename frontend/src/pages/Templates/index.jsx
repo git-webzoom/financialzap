@@ -114,11 +114,16 @@ export default function Templates() {
   const [deleting,       setDeleting]       = useState(false)
   const [deleteError,    setDeleteError]    = useState('')
   const [testTemplate,   setTestTemplate]   = useState(null)  // template being tested
+  const [page,           setPage]           = useState(1)
+
+  const PAGE_SIZE = 12
 
   useEffect(() => { loadWabas() }, [loadWabas])
   useEffect(() => { load(filterWabaId || null) }, [load, filterWabaId])
   // Reset selection when data changes
   useEffect(() => { setSelected(new Set()) }, [templates])
+  // Reset page when filter/sort changes
+  useEffect(() => { setPage(1) }, [statusFilter, filterWabaId, sortKey, sortDir])
 
   const lastSync = useMemo(() => {
     if (!templates.length) return null
@@ -170,10 +175,11 @@ export default function Templates() {
   }
 
   function toggleAll() {
-    if (selected.size === visible.length) {
-      setSelected(new Set())
+    const pageIds = paginated.map(t => `${t.waba_id}:${t.template_id}`)
+    if (allChecked) {
+      setSelected(prev => { const next = new Set(prev); pageIds.forEach(id => next.delete(id)); return next })
     } else {
-      setSelected(new Set(visible.map(t => `${t.waba_id}:${t.template_id}`)))
+      setSelected(prev => { const next = new Set(prev); pageIds.forEach(id => next.add(id)); return next })
     }
   }
 
@@ -218,6 +224,29 @@ export default function Templates() {
     }
   }
 
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [bulkError,    setBulkError]    = useState('')
+
+  async function handleBulkDelete() {
+    const count = selected.size
+    if (!window.confirm(`Excluir ${count} template${count !== 1 ? 's' : ''} selecionado${count !== 1 ? 's' : ''}? Esta ação é irreversível.`)) return
+    setBulkDeleting(true)
+    setBulkError('')
+    let failed = 0
+    for (const rowId of selected) {
+      const [wabaId, templateId] = rowId.split(':')
+      try {
+        await remove(wabaId, templateId)
+      } catch {
+        failed++
+      }
+    }
+    setSelected(new Set())
+    await load(filterWabaId || null)
+    setBulkDeleting(false)
+    if (failed > 0) setBulkError(`${failed} template${failed !== 1 ? 's' : ''} não puderam ser excluídos.`)
+  }
+
   async function handleCreate(payload) {
     setSubmitting(true)
     setFormError('')
@@ -253,8 +282,12 @@ export default function Templates() {
     return sendTest(templateId, payload)
   }, [sendTest])
 
-  const allChecked = visible.length > 0 && selected.size === visible.length
-  const someChecked = selected.size > 0 && selected.size < visible.length
+  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE))
+  const safePage   = Math.min(page, totalPages)
+  const paginated  = visible.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+
+  const allChecked  = paginated.length > 0 && paginated.every(t => selected.has(`${t.waba_id}:${t.template_id}`))
+  const someChecked = paginated.some(t => selected.has(`${t.waba_id}:${t.template_id}`)) && !allChecked
 
   return (
     <>
@@ -294,7 +327,8 @@ export default function Templates() {
         </div>
 
         {/* ── Banners ── */}
-        {error && <div className="tp-banner tp-banner--err">⚠ {error}</div>}
+        {error     && <div className="tp-banner tp-banner--err">⚠ {error}</div>}
+        {bulkError && <div className="tp-banner tp-banner--err">⚠ {bulkError}</div>}
         {Object.keys(syncFeedback).length > 0 && (
           <div className="tp-banner tp-banner--ok">
             {Object.entries(syncFeedback).map(([wid, msg]) => (
@@ -361,6 +395,7 @@ export default function Templates() {
         ) : visible.length === 0 ? (
           <EmptyState hasFilter={statusFilter !== 'ALL' || !!filterWabaId} />
         ) : (
+          <>
           <div className="tbl-wrap">
             <table className="tbl">
               <thead>
@@ -388,7 +423,7 @@ export default function Templates() {
                 </tr>
               </thead>
               <tbody>
-                {visible.map(t => {
+                {paginated.map(t => {
                   const rowId = `${t.waba_id}:${t.template_id}`
                   const isChecked = selected.has(rowId)
                   return (
@@ -439,6 +474,11 @@ export default function Templates() {
               </tbody>
             </table>
           </div>
+
+          {totalPages > 1 && (
+            <Pagination page={safePage} total={totalPages} onChange={setPage} />
+          )}
+          </>
         )}
 
         {/* ── Template detail modal ── */}
@@ -465,10 +505,22 @@ export default function Templates() {
         {/* ── Selection bar ── */}
         {selected.size > 0 && (
           <div className="tp-sel-bar">
-            <span>{selected.size} selecionado{selected.size !== 1 ? 's' : ''}</span>
-            <button className="tp-sel-clear" onClick={() => setSelected(new Set())}>
-              Limpar seleção
-            </button>
+            <span className="tp-sel-count">
+              {selected.size} selecionado{selected.size !== 1 ? 's' : ''}
+            </span>
+            <div className="tp-sel-actions">
+              <button
+                className="tp-sel-delete"
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                title="Excluir selecionados"
+              >
+                {bulkDeleting ? <><span className="tp-spinner" /> Excluindo…</> : <><IconTrash /> Excluir</>}
+              </button>
+              <button className="tp-sel-clear" onClick={() => setSelected(new Set())} disabled={bulkDeleting}>
+                Cancelar
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -875,6 +927,70 @@ function TestModal({ template: t, wabas, onClose, onSend }) {
   )
 }
 
+// ─── Pagination ───────────────────────────────────────────────────────────────
+
+function Pagination({ page, total, onChange }) {
+  // Show at most 7 page numbers with ellipsis
+  function pages() {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+    if (page <= 4)  return [1, 2, 3, 4, 5, '…', total]
+    if (page >= total - 3) return [1, '…', total - 4, total - 3, total - 2, total - 1, total]
+    return [1, '…', page - 1, page, page + 1, '…', total]
+  }
+
+  return (
+    <div className="tp-pagination">
+      <button
+        className="tp-page-btn tp-page-btn--nav"
+        onClick={() => onChange(page - 1)}
+        disabled={page === 1}
+        aria-label="Página anterior"
+      >
+        <IconChevronLeft />
+      </button>
+
+      {pages().map((p, i) =>
+        p === '…' ? (
+          <span key={`ellipsis-${i}`} className="tp-page-ellipsis">…</span>
+        ) : (
+          <button
+            key={p}
+            className={`tp-page-btn${p === page ? ' tp-page-btn--active' : ''}`}
+            onClick={() => onChange(p)}
+          >
+            {p}
+          </button>
+        )
+      )}
+
+      <button
+        className="tp-page-btn tp-page-btn--nav"
+        onClick={() => onChange(page + 1)}
+        disabled={page === total}
+        aria-label="Próxima página"
+      >
+        <IconChevronRight />
+      </button>
+    </div>
+  )
+}
+
+function IconChevronLeft() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M10 4l-4 4 4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+}
+
+function IconChevronRight() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+}
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const CSS = `
@@ -1184,13 +1300,34 @@ const CSS = `
     background: #1a1f28;
     border: 1px solid #374151;
     border-radius: 10px;
-    padding: 10px 20px;
+    padding: 10px 16px;
     font-size: 13px;
     font-family: 'DM Sans', sans-serif;
     color: #e8edf5;
     box-shadow: 0 8px 24px #00000060;
     z-index: 100;
+    white-space: nowrap;
   }
+  .tp-sel-count { color: #8a94a6; font-size: 13px; }
+  .tp-sel-actions { display: flex; align-items: center; gap: 8px; }
+  .tp-sel-delete {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: #ef444415;
+    border: 1px solid #ef444440;
+    border-radius: 7px;
+    color: #ef4444;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+    min-height: 32px;
+  }
+  .tp-sel-delete:hover:not(:disabled) { background: #ef444425; }
+  .tp-sel-delete:disabled { opacity: 0.5; cursor: not-allowed; }
   .tp-sel-clear {
     background: none;
     border: none;
@@ -1198,10 +1335,55 @@ const CSS = `
     font-family: 'DM Sans', sans-serif;
     font-size: 12px;
     cursor: pointer;
-    padding: 0;
+    padding: 4px;
     transition: color 0.15s;
   }
-  .tp-sel-clear:hover { color: #8a94a6; }
+  .tp-sel-clear:hover:not(:disabled) { color: #8a94a6; }
+  .tp-sel-clear:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Pagination ── */
+  .tp-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 8px 0 4px;
+  }
+  .tp-page-btn {
+    min-width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 6px;
+    background: #1a1f28;
+    border: 1px solid #252c38;
+    border-radius: 7px;
+    color: #4a5568;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+  .tp-page-btn:hover:not(:disabled):not(.tp-page-btn--active) {
+    color: #8a94a6;
+    border-color: #374151;
+    background: #252c38;
+  }
+  .tp-page-btn--active {
+    background: #22c55e18;
+    border-color: #22c55e40;
+    color: #22c55e;
+    font-weight: 600;
+  }
+  .tp-page-btn--nav { color: #4a5568; }
+  .tp-page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .tp-page-ellipsis {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: #2d3748;
+    padding: 0 4px;
+  }
 
   /* ── Danger button ── */
   .tp-btn--danger {
@@ -1556,6 +1738,8 @@ const CSS = `
       right: 12px;
       transform: none;
       justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
     }
 
     /* Tab count hidden on very small */
