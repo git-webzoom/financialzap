@@ -163,6 +163,13 @@ const CSS = `
     flex-wrap: wrap;
   }
 
+  @media (max-width: 640px) {
+    .wabas-header {
+      flex-direction: column;
+      gap: 14px;
+    }
+  }
+
   .wabas-title-wrap { display: flex; flex-direction: column; gap: 4px; }
 
   .wabas-title {

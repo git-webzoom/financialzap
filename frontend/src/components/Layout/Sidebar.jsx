@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 
 const NAV = [
   { to: '/dashboard',          label: 'Dashboard',    icon: IconGrid  },
@@ -11,10 +12,48 @@ const NAV = [
 ]
 
 export default function Sidebar() {
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  // Close drawer on route change
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [window.location.pathname])
+
+  // Prevent body scroll when drawer open
+  useEffect(() => {
+    document.body.style.overflow = mobileOpen ? 'hidden' : ''
+    return () => { document.body.style.overflow = '' }
+  }, [mobileOpen])
+
   return (
     <>
       <style>{CSS}</style>
-      <aside className="sidebar">
+
+      {/* ── Mobile hamburger trigger (rendered outside sidebar, into header via portal-like btn) ── */}
+      <button
+        className="sb-hamburger"
+        onClick={() => setMobileOpen(true)}
+        aria-label="Abrir menu"
+      >
+        <span /><span /><span />
+      </button>
+
+      {/* ── Backdrop ── */}
+      {mobileOpen && (
+        <div className="sb-backdrop" onClick={() => setMobileOpen(false)} />
+      )}
+
+      {/* ── Sidebar drawer ── */}
+      <aside className={`sidebar${mobileOpen ? ' sidebar--open' : ''}`}>
+        {/* Mobile close button */}
+        <button
+          className="sb-close"
+          onClick={() => setMobileOpen(false)}
+          aria-label="Fechar menu"
+        >
+          <IconClose />
+        </button>
+
         {/* Logo */}
         <div className="sidebar-logo">
           <div className="sidebar-logo-icon">⚡</div>
@@ -30,6 +69,7 @@ export default function Sidebar() {
               className={({ isActive }) =>
                 `sidebar-link${isActive ? ' sidebar-link--active' : ''}`
               }
+              onClick={() => setMobileOpen(false)}
               title={label}
             >
               <span className="sidebar-link-icon"><Icon /></span>
@@ -48,7 +88,7 @@ export default function Sidebar() {
   )
 }
 
-// ─── Icons (20×20, inline SVG) ────────────────────────────────────────────────
+// ─── Icons ────────────────────────────────────────────────────────────────────
 
 function IconGrid() {
   return (
@@ -115,9 +155,70 @@ function IconGear() {
   )
 }
 
+function IconClose() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <path d="M4 4l10 10M14 4L4 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const CSS = `
+  /* ── Hamburger button (visible only on mobile) ── */
+  .sb-hamburger {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 8px;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+  .sb-hamburger:hover { background: #1a1f28; }
+  .sb-hamburger span {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: #8a94a6;
+    border-radius: 2px;
+    transition: background 0.15s;
+  }
+
+  /* ── Close button (mobile only) ── */
+  .sb-close {
+    display: none;
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 32px;
+    height: 32px;
+    background: #1a1f28;
+    border: 1px solid #252c38;
+    border-radius: 8px;
+    color: #8a94a6;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s, background 0.15s;
+  }
+  .sb-close:hover { color: #e8edf5; background: #252c38; }
+
+  /* ── Backdrop (mobile only) ── */
+  .sb-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #00000070;
+    backdrop-filter: blur(2px);
+    z-index: 49;
+  }
+
+  /* ── Sidebar ── */
   .sidebar {
     width: 220px;
     flex-shrink: 0;
@@ -172,7 +273,8 @@ const CSS = `
     gap: 2px;
     flex: 1;
     padding: 8px 10px;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
 
   .sidebar-link {
@@ -180,13 +282,14 @@ const CSS = `
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 10px 12px;
+    padding: 11px 12px;
     border-radius: 8px;
     color: #4a5568;
     text-decoration: none;
     transition: color 0.15s, background 0.15s;
     white-space: nowrap;
     overflow: hidden;
+    min-height: 44px;
   }
 
   .sidebar-link:hover {
@@ -263,13 +366,44 @@ const CSS = `
     50%       { opacity: 0.3; box-shadow: none; }
   }
 
-  /* ── Collapse to icon-only on small screens ── */
-  @media (max-width: 768px) {
-    .sidebar { width: 68px; }
+  /* ── Tablet: icon-only sidebar ── */
+  @media (max-width: 900px) and (min-width: 641px) {
+    .sidebar { width: 64px; }
     .sidebar-logo-name   { display: none; }
     .sidebar-link-label  { display: none; }
     .sidebar-status-text { display: none; }
-    .sidebar-link        { justify-content: center; padding: 12px 8px; }
+    .sidebar-link        { justify-content: center; padding: 12px 0; }
     .sidebar-logo        { justify-content: center; padding: 0 0 20px; }
+  }
+
+  /* ── Mobile: full-width drawer ── */
+  @media (max-width: 640px) {
+    .sb-hamburger {
+      display: flex;
+      position: fixed;
+      top: 8px;
+      left: 10px;
+      z-index: 60;
+    }
+    .sb-backdrop   { display: block; }
+    .sb-close      { display: flex; }
+
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 280px;
+      z-index: 50;
+      transform: translateX(-100%);
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: none;
+      padding-top: 56px;
+    }
+
+    .sidebar--open {
+      transform: translateX(0);
+      box-shadow: 4px 0 32px #00000060;
+    }
   }
 `

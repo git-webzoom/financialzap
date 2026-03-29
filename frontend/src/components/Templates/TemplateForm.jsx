@@ -969,6 +969,20 @@ const CSS = `
   }
   @keyframes tf-spin { to { transform: rotate(360deg); } }
 
+  @media (max-width: 640px) {
+    .tf-actions {
+      flex-direction: row;
+      flex-wrap: wrap;
+    }
+    .tf-actions .tf-btn {
+      flex: 1;
+      justify-content: center;
+      min-height: 42px;
+    }
+    .tf-root { gap: 18px; padding: 4px 0; }
+    .tf-batch-name { min-width: 100px; }
+  }
+
   /* ── Batch preview hint ── */
   .tf-batch-preview {
     font-size: 11px;

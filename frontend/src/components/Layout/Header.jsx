@@ -10,7 +10,6 @@ export default function Header() {
     navigate('/login', { replace: true })
   }
 
-  // Display name: prefer name, fall back to email prefix
   const displayName = user?.name || user?.email?.split('@')[0] || 'Usuário'
   const initial = displayName.charAt(0).toUpperCase()
 
@@ -18,8 +17,9 @@ export default function Header() {
     <>
       <style>{CSS}</style>
       <header className="app-header">
-        {/* Page title slot — filled by CSS counter trick or left empty for now */}
+        {/* Left: hamburger slot (rendered by Sidebar) + breadcrumb */}
         <div className="header-left">
+          {/* The .sb-hamburger button is rendered by Sidebar and positioned here via flex order */}
           <div className="header-breadcrumb">
             <span className="header-brand">FinancialZap</span>
             <span className="header-sep">/</span>
@@ -39,7 +39,6 @@ export default function Header() {
             </div>
           </div>
 
-          {/* Divider */}
           <div className="header-divider" />
 
           {/* Logout */}
@@ -50,7 +49,7 @@ export default function Header() {
             title="Sair"
           >
             <LogoutIcon />
-            <span>Sair</span>
+            <span className="logout-label">Sair</span>
           </button>
         </div>
       </header>
@@ -77,34 +76,48 @@ const CSS = `
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 20px;
-    gap: 16px;
+    padding: 0 20px 0 16px;
+    gap: 12px;
   }
 
-  .header-left { display: flex; align-items: center; }
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  /* The .sb-hamburger floats into the header-left area via DOM order */
+  .header-left .sb-hamburger {
+    flex-shrink: 0;
+  }
 
   .header-breadcrumb {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 7px;
     font-family: 'JetBrains Mono', monospace;
     font-size: 12px;
+    min-width: 0;
+    overflow: hidden;
   }
 
-  .header-brand { color: #4a5568; }
-  .header-sep   { color: #2d3748; }
-  .header-page  { color: #8a94a6; }
+  .header-brand { color: #4a5568; white-space: nowrap; }
+  .header-sep   { color: #2d3748; flex-shrink: 0; }
+  .header-page  { color: #8a94a6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .header-right {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
+    flex-shrink: 0;
   }
 
   .user-chip {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
   }
 
   .user-avatar {
@@ -132,6 +145,7 @@ const CSS = `
     font-weight: 500;
     color: #e8edf5;
     line-height: 1;
+    white-space: nowrap;
   }
 
   .user-email {
@@ -139,12 +153,14 @@ const CSS = `
     font-size: 10px;
     color: #4a5568;
     line-height: 1;
+    white-space: nowrap;
   }
 
   .header-divider {
     width: 1px;
     height: 20px;
     background: #252c38;
+    flex-shrink: 0;
   }
 
   .logout-btn {
@@ -160,11 +176,26 @@ const CSS = `
     color: #4a5568;
     cursor: pointer;
     transition: color 0.15s, border-color 0.15s, background 0.15s;
+    min-height: 32px;
   }
 
   .logout-btn:hover {
     color: #ef4444;
     border-color: #ef444440;
     background: #ef444408;
+  }
+
+  /* ── Mobile adjustments ── */
+  @media (max-width: 640px) {
+    .app-header { padding: 0 14px 0 8px; height: 48px; }
+    .user-info { display: none; }
+    .header-divider { display: none; }
+    .header-breadcrumb { display: none; }
+    .logout-label { display: none; }
+    .logout-btn { padding: 6px 8px; border: none; }
+  }
+
+  @media (max-width: 900px) and (min-width: 641px) {
+    .user-email { display: none; }
   }
 `

@@ -328,9 +328,16 @@ const CSS = `
     background: #ef444415;
   }
   .wc-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .wc-action-btn { min-height: 36px; min-width: 36px; }
 
   .wc-spin { display: flex; animation: wc-rotate 0.8s linear infinite; }
   @keyframes wc-rotate { to { transform: rotate(360deg); } }
+
+  @media (max-width: 600px) {
+    .wc-meta { order: 3; width: 100%; }
+    .wc-actions { margin-left: 0; }
+    .wc-badge:not(:first-child) { display: none; }
+  }
 
   /* ── Alerts ── */
   .wc-alert {

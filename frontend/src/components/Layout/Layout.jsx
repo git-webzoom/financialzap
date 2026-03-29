@@ -70,64 +70,65 @@ const CSS = `
   .app-content {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     background: var(--bg-void);
-    padding: 28px 32px;
+    padding: 24px 28px;
   }
 
   /* ── Scrollbar ── */
-  .app-content::-webkit-scrollbar { width: 6px; }
+  .app-content::-webkit-scrollbar { width: 4px; }
   .app-content::-webkit-scrollbar-track { background: transparent; }
-  .app-content::-webkit-scrollbar-thumb { background: #252c38; border-radius: 3px; }
+  .app-content::-webkit-scrollbar-thumb { background: #252c38; border-radius: 2px; }
   .app-content::-webkit-scrollbar-thumb:hover { background: #374151; }
 
   /*
    * ── Global page wrapper ──────────────────────────────────────────────────────
    * Use .page-root on every page's outermost div.
-   * It ensures the page always fills the full width of app-content.
    */
   .page-root {
     width: 100%;
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 20px;
   }
 
   /*
    * ── Global card grid ─────────────────────────────────────────────────────────
-   * Use .cards-grid on any grid of metric/stat cards across the system.
-   * Always fills 100% width. Responsive: 1 col → 2 col → 4 col.
    */
   .cards-grid {
     display: grid;
     width: 100%;
     grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
+    gap: 14px;
   }
 
-  @media (max-width: 1024px) {
+  @media (max-width: 1100px) {
     .cards-grid { grid-template-columns: repeat(2, 1fr); }
   }
 
-  @media (max-width: 540px) {
-    .cards-grid { grid-template-columns: 1fr; }
+  @media (max-width: 480px) {
+    .cards-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
   }
 
   /* 2-column variant */
-  .cards-grid--2 {
-    grid-template-columns: repeat(2, 1fr);
-  }
+  .cards-grid--2 { grid-template-columns: repeat(2, 1fr); }
 
   /* 3-column variant */
-  .cards-grid--3 {
-    grid-template-columns: repeat(3, 1fr);
-  }
+  .cards-grid--3 { grid-template-columns: repeat(3, 1fr); }
 
   @media (max-width: 768px) {
     .cards-grid--2,
     .cards-grid--3 { grid-template-columns: 1fr; }
   }
 
-  @media (max-width: 540px) {
-    .app-content { padding: 20px 16px; }
+  /* ── Responsive padding ── */
+  @media (max-width: 900px) {
+    .app-content { padding: 20px 20px; }
+  }
+
+  @media (max-width: 640px) {
+    .app-content { padding: 16px 14px; }
+    /* On mobile the sidebar is a drawer — app-shell doesn't need to reserve space */
+    .app-shell { overflow: visible; }
   }
 `

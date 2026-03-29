@@ -127,42 +127,44 @@ function CampaignsTable() {
         <a href="/disparos/historico" className="campaigns-link">Ver todas →</a>
       </div>
 
-      <table className="campaigns-table">
-        <thead>
-          <tr>
-            <th>Campanha</th>
-            <th>Status</th>
-            <th>Enviadas</th>
-            <th>Entregues</th>
-            <th>Falhas</th>
-            <th>Horário</th>
-          </tr>
-        </thead>
-        <tbody>
-          {RECENT_CAMPAIGNS.map((c) => (
-            <tr key={c.id} className="campaigns-row">
-              <td className="campaigns-name">{c.name}</td>
-              <td>
-                <span
-                  className="campaign-badge"
-                  style={{
-                    color: STATUS_COLOR[c.status],
-                    background: STATUS_COLOR[c.status] + '15',
-                    borderColor: STATUS_COLOR[c.status] + '40',
-                  }}
-                >
-                  {c.status === 'running' && <span className="badge-dot" style={{ background: STATUS_COLOR[c.status] }} />}
-                  {STATUS_LABEL[c.status]}
-                </span>
-              </td>
-              <td className="campaigns-num">{c.sent.toLocaleString('pt-BR')}</td>
-              <td className="campaigns-num" style={{ color: '#22c55e' }}>{c.delivered.toLocaleString('pt-BR')}</td>
-              <td className="campaigns-num" style={{ color: '#ef4444' }}>{c.failed.toLocaleString('pt-BR')}</td>
-              <td className="campaigns-time">{c.time}</td>
+      <div className="campaigns-scroll-wrap">
+        <table className="campaigns-table">
+          <thead>
+            <tr>
+              <th>Campanha</th>
+              <th>Status</th>
+              <th>Enviadas</th>
+              <th>Entregues</th>
+              <th>Falhas</th>
+              <th>Horário</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {RECENT_CAMPAIGNS.map((c) => (
+              <tr key={c.id} className="campaigns-row">
+                <td className="campaigns-name">{c.name}</td>
+                <td>
+                  <span
+                    className="campaign-badge"
+                    style={{
+                      color: STATUS_COLOR[c.status],
+                      background: STATUS_COLOR[c.status] + '15',
+                      borderColor: STATUS_COLOR[c.status] + '40',
+                    }}
+                  >
+                    {c.status === 'running' && <span className="badge-dot" style={{ background: STATUS_COLOR[c.status] }} />}
+                    {STATUS_LABEL[c.status]}
+                  </span>
+                </td>
+                <td className="campaigns-num">{c.sent.toLocaleString('pt-BR')}</td>
+                <td className="campaigns-num" style={{ color: '#22c55e' }}>{c.delivered.toLocaleString('pt-BR')}</td>
+                <td className="campaigns-num" style={{ color: '#ef4444' }}>{c.failed.toLocaleString('pt-BR')}</td>
+                <td className="campaigns-time">{c.time}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -250,12 +252,13 @@ const CSS = `
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
-    gap: 16px;
+    gap: 12px;
+    flex-wrap: wrap;
   }
 
   .dash-title {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 22px;
+    font-size: 20px;
     font-weight: 700;
     color: #e8edf5;
     letter-spacing: -0.5px;
@@ -281,10 +284,17 @@ const CSS = `
     text-decoration: none;
     transition: background 0.15s, box-shadow 0.15s;
     flex-shrink: 0;
+    min-height: 40px;
   }
   .dash-cta:hover {
     background: #16a34a;
     box-shadow: 0 0 20px #22c55e30;
+  }
+
+  @media (max-width: 480px) {
+    .dash-heading { align-items: flex-start; }
+    .dash-title { font-size: 18px; }
+    .dash-subtitle { font-size: 12px; }
   }
 
   /* ── Stat card ── */
@@ -293,10 +303,10 @@ const CSS = `
     border: 1px solid #252c38;
     border-top: 2px solid var(--card-accent);
     border-radius: 10px;
-    padding: 20px;
+    padding: 16px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
     animation: card-in 0.4s ease both;
     transition: border-color 0.2s, box-shadow 0.2s;
   }
@@ -335,11 +345,17 @@ const CSS = `
 
   .stat-value {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 32px;
+    font-size: 28px;
     font-weight: 700;
     color: #e8edf5;
     letter-spacing: -1px;
     line-height: 1;
+  }
+
+  @media (max-width: 480px) {
+    .stat-value { font-size: 22px; }
+    .stat-label { font-size: 11px; }
+    .stat-trend { font-size: 9px; }
   }
 
   .stat-unit {
@@ -367,9 +383,16 @@ const CSS = `
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 18px 20px;
+    padding: 14px 16px;
     border-bottom: 1px solid #252c38;
   }
+
+  .campaigns-scroll-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .campaigns-scroll-wrap::-webkit-scrollbar { height: 3px; }
+  .campaigns-scroll-wrap::-webkit-scrollbar-thumb { background: #252c38; border-radius: 2px; }
 
   .campaigns-title {
     font-family: 'JetBrains Mono', monospace;
@@ -459,5 +482,20 @@ const CSS = `
     border-radius: 50%;
     animation: sb-pulse 1.5s ease-in-out infinite;
     flex-shrink: 0;
+  }
+
+  /* ── Mobile: hide secondary columns ── */
+  @media (max-width: 600px) {
+    .campaigns-table th:nth-child(4),
+    .campaigns-table th:nth-child(5),
+    .campaigns-table th:nth-child(6),
+    .campaigns-table td:nth-child(4),
+    .campaigns-table td:nth-child(5),
+    .campaigns-table td:nth-child(6) { display: none; }
+
+    .campaigns-table th,
+    .campaigns-table td { padding: 11px 12px; }
+
+    .campaigns-title { font-size: 11px; }
   }
 `

@@ -1472,4 +1472,99 @@ const CSS = `
   }
   .tm-test-result--ok  { background: #22c55e12; border: 1px solid #22c55e30; color: #86efac; }
   .tm-test-result--err { background: #ef444412; border: 1px solid #ef444430; color: #fca5a5; }
+
+  /* ── Mobile responsiveness ── */
+  @media (max-width: 640px) {
+    /* Header stacks */
+    .tp-header {
+      flex-direction: column;
+      gap: 12px;
+    }
+    .tp-header-actions {
+      width: 100%;
+      justify-content: stretch;
+    }
+    .tp-header-actions .tp-btn {
+      flex: 1;
+      justify-content: center;
+      min-height: 42px;
+    }
+
+    /* Filters stack */
+    .tp-filters {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+    }
+    .tp-select { width: 100%; }
+    .tp-status-tabs {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      width: 100%;
+    }
+    .tp-status-tabs::-webkit-scrollbar { display: none; }
+
+    /* Form panel full-width */
+    .tp-form-panel {
+      padding: 16px;
+      border-radius: 10px;
+    }
+
+    /* Modal full-screen on mobile */
+    .tdm-backdrop {
+      padding: 0;
+      align-items: flex-end;
+    }
+    .tdm-panel {
+      max-width: 100%;
+      border-radius: 16px 16px 0 0;
+      max-height: 92vh;
+      padding: 20px 16px;
+      gap: 16px;
+    }
+    .tm-test-panel {
+      max-width: 100%;
+    }
+    .tm-test-form { padding: 12px 0 4px; }
+
+    /* Meta grid single column */
+    .tdm-meta {
+      grid-template-columns: 1fr;
+    }
+
+    /* Actions stack */
+    .tdm-actions {
+      flex-wrap: wrap;
+    }
+    .tdm-actions .tp-btn {
+      flex: 1;
+      justify-content: center;
+      min-height: 42px;
+    }
+
+    /* Action button in table larger touch target */
+    .tbl-action-btn {
+      width: 36px;
+      height: 36px;
+    }
+    .tbl-td--actions { padding: 4px 6px; }
+
+    /* Selection bar full-width */
+    .tp-sel-bar {
+      bottom: 12px;
+      left: 12px;
+      right: 12px;
+      transform: none;
+      justify-content: space-between;
+    }
+
+    /* Tab count hidden on very small */
+    .tp-tab-count { display: none; }
+  }
+
+  @media (max-width: 480px) {
+    .tp-title { font-size: 19px; }
+    .tdm-name { font-size: 13px; }
+    .tf-var-grid { grid-template-columns: 1fr; }
+  }
 `
