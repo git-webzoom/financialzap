@@ -12,15 +12,28 @@ const wabaService = require('./waba.service')
 async function listTemplates(userId, wabaId = null) {
   const db = getDb()
 
+  // sent_count: number of campaign_contacts rows that used this template (by template_id)
   const sql = wabaId
-    ? `SELECT t.*, w.name AS waba_name
+    ? `SELECT t.*, w.name AS waba_name,
+              COALESCE(cc.sent_count, 0) AS sent_count
        FROM templates t
        JOIN wabas w ON w.waba_id = t.waba_id
+       LEFT JOIN (
+         SELECT template_id, COUNT(*) AS sent_count
+         FROM campaign_contacts
+         GROUP BY template_id
+       ) cc ON cc.template_id = t.template_id
        WHERE w.user_id = ? AND t.waba_id = ?
        ORDER BY t.created_at DESC`
-    : `SELECT t.*, w.name AS waba_name
+    : `SELECT t.*, w.name AS waba_name,
+              COALESCE(cc.sent_count, 0) AS sent_count
        FROM templates t
        JOIN wabas w ON w.waba_id = t.waba_id
+       LEFT JOIN (
+         SELECT template_id, COUNT(*) AS sent_count
+         FROM campaign_contacts
+         GROUP BY template_id
+       ) cc ON cc.template_id = t.template_id
        WHERE w.user_id = ?
        ORDER BY t.created_at DESC`
 

@@ -86,13 +86,12 @@ function SortIcon({ active, dir }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 const COLS = [
-  { key: 'name',            label: 'Nome do modelo' },
-  { key: 'category',        label: 'Categoria' },
-  { key: 'language',        label: 'Idioma' },
-  { key: 'status',          label: 'Status' },
-  { key: 'quality_score',   label: 'Qualidade' },
-  { key: 'rejected_reason', label: 'Motivo rejeição' },
-  { key: 'last_sync_at',    label: 'Última sincronização' },
+  { key: 'name',        label: 'Nome do modelo' },
+  { key: 'category',    label: 'Categoria' },
+  { key: 'language',    label: 'Idioma' },
+  { key: 'status',      label: 'Status' },
+  { key: 'sent_count',  label: 'Disparos' },
+  { key: 'created_at',  label: 'Criado em' },
 ]
 
 export default function Templates() {
@@ -109,7 +108,7 @@ export default function Templates() {
   const [globalSyncing, setGlobalSyncing] = useState(false)
   const [statusFilter,  setStatusFilter]  = useState('ALL')
   const [selected,      setSelected]      = useState(new Set())
-  const [sortKey,       setSortKey]       = useState('last_sync_at')
+  const [sortKey,       setSortKey]       = useState('created_at')
   const [sortDir,       setSortDir]       = useState('desc')
   const [detailTemplate, setDetailTemplate] = useState(null) // template aberto no modal
   const [deleting,       setDeleting]       = useState(false)
@@ -142,12 +141,13 @@ export default function Templates() {
     return templates.filter(t => t.status?.toUpperCase() === statusFilter)
   }, [templates, statusFilter])
 
+  const NUMERIC_COLS = new Set(['sent_count'])
+
   const visible = useMemo(() => {
     return [...filtered].sort((a, b) => {
       let va = a[sortKey] ?? ''
       let vb = b[sortKey] ?? ''
-      // numeric sort for counts
-      if (false) { // no numeric columns currently
+      if (NUMERIC_COLS.has(sortKey)) {
         va = Number(va) || 0
         vb = Number(vb) || 0
         return sortDir === 'asc' ? va - vb : vb - va
@@ -417,9 +417,13 @@ export default function Templates() {
                       <td className="tbl-td">{CATEGORY_LABELS[t.category] || t.category || '—'}</td>
                       <td className="tbl-td">{t.language || '—'}</td>
                       <td className="tbl-td"><StatusBadge status={t.status} /></td>
-                      <td className="tbl-td"><QualityBadge score={t.quality_score} /></td>
-                      <td className="tbl-td tbl-td--rejected">{t.rejected_reason || '—'}</td>
-                      <td className="tbl-td tbl-td--date">{formatDatePT(t.last_sync_at)}</td>
+                      <td className="tbl-td tbl-td--sent">
+                        {t.sent_count > 0
+                          ? <span className="tbl-sent-count">{Number(t.sent_count).toLocaleString('pt-BR')}</span>
+                          : <span className="tbl-dash">—</span>
+                        }
+                      </td>
+                      <td className="tbl-td tbl-td--date">{formatDatePT(t.created_at)}</td>
                       <td className="tbl-td tbl-td--actions" onClick={e => e.stopPropagation()}>
                         <button
                           className="tbl-action-btn"
@@ -1114,7 +1118,16 @@ const CSS = `
   }
   .tbl-td--check { width: 40px; padding: 12px 12px; background: #0c0f13; }
   .tbl-td--date { white-space: nowrap; font-size: 12px; color: #4a5568; }
-  .tbl-td--rejected { font-size: 11px; color: #ef4444; font-family: 'JetBrains Mono', monospace; }
+  .tbl-td--sent { white-space: nowrap; }
+  .tbl-sent-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: #e8edf5;
+    background: #1a1f28;
+    border: 1px solid #252c38;
+    border-radius: 5px;
+    padding: 2px 8px;
+  }
   .tbl-dash { color: #2d3748; }
 
   .tbl-name {
