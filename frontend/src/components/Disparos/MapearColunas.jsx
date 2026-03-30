@@ -17,39 +17,64 @@ import { useMemo, useRef } from 'react'
  *   personalisation { [templateId]: { mediaUrl, varTemplates } }
  *   onChange(templateId, fields)
  */
+/**
+ * Extracts the grouping key for a template: the BODY text (the copy).
+ * Templates with identical body text share one personalisation panel.
+ * Falls back to templateId if there is no body (e.g. media-only templates).
+ */
+function copyKey(tpl) {
+  const structure = Array.isArray(tpl.structure) ? tpl.structure : []
+  const body = structure.find(c => c.type === 'BODY')
+  return body?.text?.trim() || tpl.templateId
+}
+
 export default function MapearColunas({ templates, columns, preview, personalisation, onChange }) {
   if (!templates.length) return null
 
-  // Deduplicate by templateId, keeping count of how many slots share each ID
-  const deduplicated = useMemo(() => {
-    const seen = new Map()   // templateId → { tpl, count, slotNumbers }
+  // Group templates by copy (BODY text). Templates with identical copy share one panel.
+  // Each group: { representativeTpl, templateIds[], names[], slotNumbers[] }
+  const groups = useMemo(() => {
+    const map = new Map()  // copyKey → group
     templates.forEach((tpl, idx) => {
-      if (seen.has(tpl.templateId)) {
-        const entry = seen.get(tpl.templateId)
-        entry.count++
-        entry.slotNumbers.push(idx + 1)
+      const key = copyKey(tpl)
+      if (map.has(key)) {
+        const g = map.get(key)
+        g.templateIds.push(tpl.templateId)
+        g.names.push(tpl.name)
+        g.slotNumbers.push(idx + 1)
       } else {
-        seen.set(tpl.templateId, { tpl, count: 1, slotNumbers: [idx + 1] })
+        map.set(key, {
+          representativeTpl: tpl,
+          templateIds:  [tpl.templateId],
+          names:        [tpl.name],
+          slotNumbers:  [idx + 1],
+        })
       }
     })
-    return [...seen.values()]
+    return [...map.values()]
   }, [templates])
+
+  // When a shared panel changes, propagate to all templateIds in the group
+  function handleChange(templateIds, fields) {
+    templateIds.forEach(id => onChange(id, fields))
+  }
 
   return (
     <>
       <style>{CSS}</style>
       <div className="mc-root">
-        {deduplicated.map(({ tpl, count, slotNumbers }, panelIdx) => (
+        {groups.map(({ representativeTpl, templateIds, names, slotNumbers }, panelIdx) => (
           <TemplatePanel
-            key={tpl.templateId}
-            tpl={tpl}
+            key={templateIds.join(',')}
+            tpl={representativeTpl}
             panelIdx={panelIdx}
-            slotCount={count}
+            sharedIds={templateIds}
+            sharedNames={names}
             slotNumbers={slotNumbers}
             columns={columns}
             preview={preview}
-            config={personalisation[tpl.templateId] || {}}
-            onChange={(fields) => onChange(tpl.templateId, fields)}
+            config={personalisation[representativeTpl.templateId] || {}}
+            onChange={(fields) => handleChange(templateIds, fields)}
           />
         ))}
       </div>
@@ -57,7 +82,8 @@ export default function MapearColunas({ templates, columns, preview, personalisa
   )
 }
 
-function TemplatePanel({ tpl, panelIdx, slotCount, slotNumbers, columns, preview, config, onChange }) {
+function TemplatePanel({ tpl, panelIdx, sharedIds, sharedNames, slotNumbers, columns, preview, config, onChange }) {
+  const isShared = sharedIds.length > 1
   const structure   = Array.isArray(tpl.structure) ? tpl.structure : []
   const bodyComp    = structure.find(c => c.type === 'BODY')
   const headerComp  = structure.find(c => c.type === 'HEADER')
@@ -99,11 +125,18 @@ function TemplatePanel({ tpl, panelIdx, slotCount, slotNumbers, columns, preview
   return (
     <div className="mc-panel">
       <div className="mc-panel-header">
-        <span className="mc-panel-num">Template {panelIdx + 1}</span>
-        <span className="mc-panel-name">{tpl.name}</span>
-        {slotCount > 1 && (
-          <span className="mc-panel-shared" title={`Slots ${slotNumbers.join(', ')} usam este template`}>
-            ✕{slotCount} slots — preenchimento compartilhado
+        <span className="mc-panel-num">Grupo {panelIdx + 1}</span>
+        <div className="mc-panel-names">
+          {sharedNames.map((n, i) => (
+            <span key={i} className="mc-panel-name">{n}</span>
+          ))}
+        </div>
+        {isShared && (
+          <span
+            className="mc-panel-shared"
+            title={`Templates com copy idêntica — slots ${slotNumbers.join(', ')}`}
+          >
+            {sharedIds.length} templates com copy igual
           </span>
         )}
       </div>
@@ -288,10 +321,14 @@ const CSS = `
     border-radius: 4px; padding: 2px 8px;
     font-family: 'DM Sans', sans-serif; white-space: nowrap;
   }
+  .mc-panel-names {
+    display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0;
+  }
   .mc-panel-name {
-    font-family: 'JetBrains Mono', monospace; font-size: 13px;
-    color: #8a94a6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    flex: 1;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    color: #8a94a6; background: #1a1f28; border: 1px solid #252c38;
+    border-radius: 4px; padding: 2px 8px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;
   }
   .mc-panel-shared {
     font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 600;
