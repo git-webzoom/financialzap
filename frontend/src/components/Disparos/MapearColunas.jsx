@@ -7,6 +7,9 @@ import { useMemo, useRef } from 'react'
  * pode escrever qualquer texto e inserir {{nome_coluna}} do CSV onde quiser.
  * Ex: "Olá {{nome}}, seu vencimento é {{data}}."
  *
+ * Templates com o mesmo templateId são deduplicados: um único painel é exibido
+ * e o preenchimento se aplica a todos os slots com aquele ID.
+ *
  * Props:
  *   templates      { templateId, name, structure }[]
  *   columns        string[]           CSV column names
@@ -17,15 +20,32 @@ import { useMemo, useRef } from 'react'
 export default function MapearColunas({ templates, columns, preview, personalisation, onChange }) {
   if (!templates.length) return null
 
+  // Deduplicate by templateId, keeping count of how many slots share each ID
+  const deduplicated = useMemo(() => {
+    const seen = new Map()   // templateId → { tpl, count, slotNumbers }
+    templates.forEach((tpl, idx) => {
+      if (seen.has(tpl.templateId)) {
+        const entry = seen.get(tpl.templateId)
+        entry.count++
+        entry.slotNumbers.push(idx + 1)
+      } else {
+        seen.set(tpl.templateId, { tpl, count: 1, slotNumbers: [idx + 1] })
+      }
+    })
+    return [...seen.values()]
+  }, [templates])
+
   return (
     <>
       <style>{CSS}</style>
       <div className="mc-root">
-        {templates.map((tpl, idx) => (
+        {deduplicated.map(({ tpl, count, slotNumbers }, panelIdx) => (
           <TemplatePanel
             key={tpl.templateId}
             tpl={tpl}
-            idx={idx}
+            panelIdx={panelIdx}
+            slotCount={count}
+            slotNumbers={slotNumbers}
             columns={columns}
             preview={preview}
             config={personalisation[tpl.templateId] || {}}
@@ -37,7 +57,7 @@ export default function MapearColunas({ templates, columns, preview, personalisa
   )
 }
 
-function TemplatePanel({ tpl, idx, columns, preview, config, onChange }) {
+function TemplatePanel({ tpl, panelIdx, slotCount, slotNumbers, columns, preview, config, onChange }) {
   const structure   = Array.isArray(tpl.structure) ? tpl.structure : []
   const bodyComp    = structure.find(c => c.type === 'BODY')
   const headerComp  = structure.find(c => c.type === 'HEADER')
@@ -79,8 +99,13 @@ function TemplatePanel({ tpl, idx, columns, preview, config, onChange }) {
   return (
     <div className="mc-panel">
       <div className="mc-panel-header">
-        <span className="mc-panel-num">Template {idx + 1}</span>
+        <span className="mc-panel-num">Template {panelIdx + 1}</span>
         <span className="mc-panel-name">{tpl.name}</span>
+        {slotCount > 1 && (
+          <span className="mc-panel-shared" title={`Slots ${slotNumbers.join(', ')} usam este template`}>
+            ✕{slotCount} slots — preenchimento compartilhado
+          </span>
+        )}
       </div>
 
       <div className="mc-panel-body">
@@ -266,6 +291,12 @@ const CSS = `
   .mc-panel-name {
     font-family: 'JetBrains Mono', monospace; font-size: 13px;
     color: #8a94a6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    flex: 1;
+  }
+  .mc-panel-shared {
+    font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 600;
+    color: #f59e0b; background: #f59e0b15; border: 1px solid #f59e0b30;
+    border-radius: 4px; padding: 2px 8px; white-space: nowrap; flex-shrink: 0;
   }
 
   .mc-panel-body { padding: 18px; display: flex; flex-direction: column; gap: 20px; }
