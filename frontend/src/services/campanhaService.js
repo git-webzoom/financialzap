@@ -32,3 +32,23 @@ export async function getCampanhaStatus(campaignId) {
   const { data } = await api.get(`/api/campanhas/${campaignId}/status`)
   return data
 }
+
+/**
+ * GET /api/campanhas
+ * Returns all campaigns for the authenticated user (summary list).
+ */
+export async function listCampanhas() {
+  const { data } = await api.get('/api/campanhas')
+  return data
+}
+
+/**
+ * GET /api/campanhas/:id/contacts
+ * Returns paginated contacts for a campaign.
+ * @param {number} campaignId
+ * @param {object} params  — { page, limit, status }
+ */
+export async function getCampanhaContacts(campaignId, params = {}) {
+  const { data } = await api.get(`/api/campanhas/${campaignId}/contacts`, { params })
+  return data
+}

@@ -249,6 +249,54 @@ async function createCampanha(userId, draft) {
   return { campaign_id: campaignId, total_enqueued: jobs.length }
 }
 
+// ─── Get campaign contacts ────────────────────────────────────────────────────
+
+/**
+ * Returns paginated contacts for a campaign (ownership verified via campaign query).
+ * @param {number} userId
+ * @param {number} campaignId
+ * @param {object} opts  — { page=1, limit=50, status? }
+ */
+async function getCampanhaContacts(userId, campaignId, opts = {}) {
+  const db = getDb()
+
+  // Verify ownership
+  const own = await db.execute({
+    sql: 'SELECT id FROM campaigns WHERE id = ? AND user_id = ?',
+    args: [campaignId, userId],
+  })
+  if (!own.rows.length) throw new Error('Campanha não encontrada.')
+
+  const page   = Math.max(1, parseInt(opts.page)  || 1)
+  const limit  = Math.max(1, Math.min(200, parseInt(opts.limit) || 50))
+  const offset = (page - 1) * limit
+
+  let sql  = 'SELECT id, phone, template_id, status, error_message, sent_at FROM campaign_contacts WHERE campaign_id = ?'
+  const args = [campaignId]
+
+  if (opts.status) {
+    sql += ' AND status = ?'
+    args.push(opts.status)
+  }
+
+  const countSql = sql.replace('SELECT id, phone, template_id, status, error_message, sent_at', 'SELECT COUNT(*) as total')
+  const countRes = await db.execute({ sql: countSql, args })
+  const total    = Number(countRes.rows[0].total)
+
+  sql += ' ORDER BY id ASC LIMIT ? OFFSET ?'
+  args.push(limit, offset)
+
+  const rows = await db.execute({ sql, args })
+
+  return {
+    contacts: rows.rows,
+    total,
+    page,
+    limit,
+    pages: Math.ceil(total / limit),
+  }
+}
+
 // ─── Get campaign status ──────────────────────────────────────────────────────
 
 /**
@@ -284,4 +332,4 @@ async function listCampanhas(userId) {
   return rows.rows
 }
 
-module.exports = { divideContacts, createCampanha, getCampanhaStatus, listCampanhas }
+module.exports = { divideContacts, createCampanha, getCampanhaStatus, listCampanhas, getCampanhaContacts }

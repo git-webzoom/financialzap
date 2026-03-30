@@ -1,5 +1,5 @@
 const { parseCSV } = require('../services/csv.service')
-const { createCampanha, getCampanhaStatus, listCampanhas } = require('../services/campanha.service')
+const { createCampanha, getCampanhaStatus, listCampanhas, getCampanhaContacts } = require('../services/campanha.service')
 
 /**
  * POST /api/campanhas/upload-csv
@@ -64,4 +64,20 @@ async function listCampanhasHandler(req, res) {
   }
 }
 
-module.exports = { uploadCSV, createCampanhaHandler, getCampanhaStatusHandler, listCampanhasHandler }
+/**
+ * GET /api/campanhas/:id/contacts
+ * Returns paginated contacts for a campaign.
+ */
+async function getCampanhaContactsHandler(req, res) {
+  try {
+    const userId     = req.user.id
+    const campaignId = Number(req.params.id)
+    const data = await getCampanhaContacts(userId, campaignId, req.query)
+    return res.json(data)
+  } catch (err) {
+    const status = err.message === 'Campanha não encontrada.' ? 404 : 500
+    return res.status(status).json({ error: err.message })
+  }
+}
+
+module.exports = { uploadCSV, createCampanhaHandler, getCampanhaStatusHandler, listCampanhasHandler, getCampanhaContactsHandler }
