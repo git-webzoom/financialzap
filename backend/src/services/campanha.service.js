@@ -107,4 +107,181 @@ function _divideWeighted(contacts, templateIds, weights) {
   return result
 }
 
-module.exports = { divideContacts }
+// ─── Create campaign ──────────────────────────────────────────────────────────
+
+const { getDb }          = require('../db/database')
+const { disparosQueue }  = require('../queue')
+
+/**
+ * Persists a campaign + all contacts in the DB, then enqueues every contact
+ * as a BullMQ job respecting the configured speed (messages/second).
+ *
+ * @param {number} userId
+ * @param {object} draft  — full useCampanha draft from the frontend
+ *   draft.name, draft.wabaId, draft.phoneNumberId, draft.speed,
+ *   draft.scheduleType, draft.scheduledAt,
+ *   draft.templates  [{ templateId, wabaId, name, language, structure }]
+ *   draft.splitMode, draft.weights
+ *   draft.columns, draft.phoneColumn
+ *   draft.preview  (only first 5 rows — we need full CSV rows here)
+ *   draft.csvRows  (full parsed rows array)
+ *   draft.personalisation { [templateId]: { fixedVars, dynamicVars, mediaUrl } }
+ */
+async function createCampanha(userId, draft) {
+  const db = getDb()
+
+  const {
+    name, wabaId, phoneNumberId, speed = 1,
+    scheduleType, scheduledAt,
+    templates, splitMode, weights,
+    phoneColumn, csvRows = [],
+    personalisation = {},
+  } = draft
+
+  if (!name?.trim())     throw new Error('Nome da campanha é obrigatório.')
+  if (!wabaId)           throw new Error('WABA é obrigatória.')
+  if (!phoneNumberId)    throw new Error('Número de origem é obrigatório.')
+  if (!templates?.length) throw new Error('Selecione ao menos um template.')
+  if (!phoneColumn)      throw new Error('Coluna do telefone não definida.')
+  if (!csvRows.length)   throw new Error('Nenhum contato no CSV.')
+
+  const scheduledAtVal = scheduleType === 'scheduled' && scheduledAt ? scheduledAt : null
+
+  // 1. Insert campaign row
+  const campaignRes = await db.execute({
+    sql: `INSERT INTO campaigns
+          (user_id, name, waba_id, phone_number_id, status, speed_per_second,
+           scheduled_at, total_contacts, created_at, updated_at)
+          VALUES (?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
+    args: [
+      userId, name.trim(), wabaId, phoneNumberId,
+      'pending', Math.max(1, Math.min(80, Number(speed) || 1)),
+      scheduledAtVal, csvRows.length,
+    ],
+  })
+  const campaignId = Number(campaignRes.lastInsertRowid)
+
+  // 2. Divide contacts per template
+  const templateIds = templates.map(t => t.templateId)
+  const slices = divideContacts(csvRows, templateIds, {
+    mode:    splitMode || 'equal',
+    weights: weights?.length ? weights : undefined,
+  })
+
+  const templateMap = Object.fromEntries(templates.map(t => [t.templateId, t]))
+
+  // 3. Insert all contacts + build jobs array
+  const jobs = []
+
+  for (const slice of slices) {
+    const tpl  = templateMap[slice.templateId]
+    const pers = personalisation[slice.templateId] || {}
+    const { fixedVars = {}, dynamicVars = {}, mediaUrl = '' } = pers
+
+    for (const row of slice.contacts) {
+      const phone = String(row[phoneColumn] || '').replace(/\D/g, '')
+      if (!phone) continue  // skip rows with no phone
+
+      // Merge variable values: dynamic (from CSV row) overrides fixed
+      const variables = { ...fixedVars }
+      for (const [varIdx, colName] of Object.entries(dynamicVars)) {
+        if (row[colName] !== undefined) variables[varIdx] = String(row[colName])
+      }
+
+      const contactRes = await db.execute({
+        sql: `INSERT INTO campaign_contacts
+              (campaign_id, phone, template_id, variables, status)
+              VALUES (?,?,?,?,'pending')`,
+        args: [campaignId, phone, slice.templateId, JSON.stringify(variables)],
+      })
+      const contactId = Number(contactRes.lastInsertRowid)
+
+      jobs.push({
+        name: `disparo:${campaignId}:${contactId}`,
+        data: {
+          contactId,
+          campaignId,
+          phoneNumberId,
+          wabaId,
+          to:           phone,
+          templateId:   slice.templateId,
+          templateName: tpl.name,
+          language:     tpl.language || 'pt_BR',
+          variables,
+          mediaUrl:     mediaUrl || null,
+          structure:    tpl.structure || [],
+          speedPerSecond: Number(speed) || 1,
+        },
+        opts: {
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 2000 },
+          // Rate limit: 1000ms / speed jobs per second = delay between jobs
+          delay: scheduledAtVal ? Math.max(0, new Date(scheduledAtVal) - Date.now()) : 0,
+        },
+      })
+    }
+  }
+
+  // Update total_contacts with actual non-empty phones
+  await db.execute({
+    sql: `UPDATE campaigns SET total_contacts = ? WHERE id = ?`,
+    args: [jobs.length, campaignId],
+  })
+
+  // 4. Enqueue all jobs with rate limiting
+  const speedPerSec = Math.max(1, Math.min(80, Number(speed) || 1))
+  const delayBetween = Math.floor(1000 / speedPerSec)  // ms between each job
+
+  const jobsWithDelay = jobs.map((job, i) => ({
+    ...job,
+    opts: { ...job.opts, delay: (job.opts.delay || 0) + i * delayBetween },
+  }))
+
+  await disparosQueue.addBulk(jobsWithDelay)
+
+  // 5. Mark campaign as running (or scheduled)
+  const newStatus = scheduledAtVal ? 'scheduled' : 'running'
+  await db.execute({
+    sql: `UPDATE campaigns SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    args: [newStatus, campaignId],
+  })
+
+  return { campaign_id: campaignId, total_enqueued: jobs.length }
+}
+
+// ─── Get campaign status ──────────────────────────────────────────────────────
+
+/**
+ * Returns real-time progress for a campaign.
+ * Verifies ownership via user_id.
+ */
+async function getCampanhaStatus(userId, campaignId) {
+  const db = getDb()
+  const rows = await db.execute({
+    sql: `SELECT id, name, status, total_contacts, sent, delivered, failed,
+                 speed_per_second, scheduled_at, created_at, updated_at
+          FROM campaigns
+          WHERE id = ? AND user_id = ?`,
+    args: [campaignId, userId],
+  })
+  if (!rows.rows.length) throw new Error('Campanha não encontrada.')
+  return rows.rows[0]
+}
+
+/**
+ * List all campaigns for a user (summary view).
+ */
+async function listCampanhas(userId) {
+  const db = getDb()
+  const rows = await db.execute({
+    sql: `SELECT id, name, status, total_contacts, sent, delivered, failed,
+                 speed_per_second, scheduled_at, created_at, updated_at
+          FROM campaigns
+          WHERE user_id = ?
+          ORDER BY created_at DESC`,
+    args: [userId],
+  })
+  return rows.rows
+}
+
+module.exports = { divideContacts, createCampanha, getCampanhaStatus, listCampanhas }

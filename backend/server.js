@@ -20,6 +20,9 @@ app.use('/api/aquecimento', require('./src/routes/aquecimento.routes'))
 // Run migrations then start server
 migrate()
   .then(() => {
+    // Start BullMQ dispatch worker
+    require('./src/workers/disparo.worker').startWorker()
+
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`)
     })
