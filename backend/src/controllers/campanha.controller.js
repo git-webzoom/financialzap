@@ -26,7 +26,7 @@ async function uploadCSV(req, res) {
  */
 async function createCampanhaHandler(req, res) {
   try {
-    const userId = req.user.id
+    const userId = req.user.sub
     const result = await createCampanha(userId, req.body)
     return res.status(201).json(result)
   } catch (err) {
@@ -40,7 +40,7 @@ async function createCampanhaHandler(req, res) {
  */
 async function getCampanhaStatusHandler(req, res) {
   try {
-    const userId = req.user.id
+    const userId = req.user.sub
     const campaignId = Number(req.params.id)
     const data = await getCampanhaStatus(userId, campaignId)
     return res.json(data)
@@ -56,7 +56,7 @@ async function getCampanhaStatusHandler(req, res) {
  */
 async function listCampanhasHandler(req, res) {
   try {
-    const userId = req.user.id
+    const userId = req.user.sub
     const data = await listCampanhas(userId)
     return res.json(data)
   } catch (err) {
@@ -70,7 +70,7 @@ async function listCampanhasHandler(req, res) {
  */
 async function getCampanhaContactsHandler(req, res) {
   try {
-    const userId     = req.user.id
+    const userId     = req.user.sub
     const campaignId = Number(req.params.id)
     const data = await getCampanhaContacts(userId, campaignId, req.query)
     return res.json(data)
