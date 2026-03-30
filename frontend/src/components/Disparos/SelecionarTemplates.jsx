@@ -1,4 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+
+const PAGE_SIZE = 5
 
 /**
  * Etapa 2 — Seleção e divisão de templates
@@ -19,6 +21,24 @@ export default function SelecionarTemplates({
   onChange,
 }) {
   const selectedIds = useMemo(() => new Set(selected.map(t => t.templateId)), [selected])
+
+  const [search, setSearch] = useState('')
+  const [page,   setPage]   = useState(1)
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return availableTemplates
+    return availableTemplates.filter(t =>
+      t.name?.toLowerCase().includes(q) ||
+      t.category?.toLowerCase().includes(q)
+    )
+  }, [availableTemplates, search])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const safePage   = Math.min(page, totalPages)
+  const paginated  = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+
+  function handleSearch(val) { setSearch(val); setPage(1) }
 
   function toggleTemplate(tpl) {
     let next
@@ -92,8 +112,26 @@ export default function SelecionarTemplates({
       {availableTemplates.length === 0 ? (
         <div className="st-empty">Nenhum template disponível. Sincronize uma WABA primeiro.</div>
       ) : (
+        <>
+        {/* Search */}
+        <div className="st-search-wrap">
+          <span className="st-search-icon">🔍</span>
+          <input
+            className="st-search"
+            placeholder="Buscar por nome ou categoria…"
+            value={search}
+            onChange={e => handleSearch(e.target.value)}
+          />
+          {search && (
+            <button className="st-search-clear" onClick={() => handleSearch('')}>✕</button>
+          )}
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="st-empty">Nenhum template encontrado para "{search}".</div>
+        ) : (
         <div className="st-list">
-          {availableTemplates.map(tpl => {
+          {paginated.map(tpl => {
             const checked = selectedIds.has(tpl.template_id)
             const body    = tpl.structure?.find?.(c => c.type === 'BODY')
             return (
@@ -124,6 +162,34 @@ export default function SelecionarTemplates({
             )
           })}
         </div>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="st-pagination">
+            <button
+              className="st-page-btn"
+              onClick={() => setPage(p => p - 1)}
+              disabled={safePage === 1}
+            >‹</button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+              <button
+                key={p}
+                className={`st-page-btn${p === safePage ? ' st-page-btn--active' : ''}`}
+                onClick={() => setPage(p)}
+              >{p}</button>
+            ))}
+            <button
+              className="st-page-btn"
+              onClick={() => setPage(p => p + 1)}
+              disabled={safePage === totalPages}
+            >›</button>
+            <span className="st-page-info">
+              {filtered.length} template{filtered.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+        )}
+        </>
       )}
 
       {/* Split config — only shown when ≥1 template selected */}
@@ -315,4 +381,48 @@ const CSS = `
     border-top: 1px solid #1a1f28; padding-top: 12px;
   }
   .st-split-total strong { color: #8a94a6; }
+
+  /* ── Search ── */
+  .st-search-wrap {
+    display: flex; align-items: center; gap: 8px;
+    background: #1a1f28; border: 1px solid #252c38;
+    border-radius: 8px; padding: 0 12px;
+    transition: border-color 0.15s;
+  }
+  .st-search-wrap:focus-within { border-color: #22c55e60; }
+  .st-search-icon { font-size: 13px; flex-shrink: 0; opacity: 0.5; }
+  .st-search {
+    flex: 1; background: transparent; border: none; outline: none;
+    color: #e8edf5; font-family: 'DM Sans', sans-serif; font-size: 13px;
+    padding: 9px 0;
+  }
+  .st-search::placeholder { color: #374151; }
+  .st-search-clear {
+    background: none; border: none; color: #4a5568;
+    cursor: pointer; font-size: 12px; padding: 4px;
+    transition: color 0.15s; flex-shrink: 0;
+  }
+  .st-search-clear:hover { color: #8a94a6; }
+
+  /* ── Pagination ── */
+  .st-pagination {
+    display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  }
+  .st-page-btn {
+    min-width: 30px; height: 30px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: #1a1f28; border: 1px solid #252c38;
+    border-radius: 6px; color: #4a5568;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    cursor: pointer; transition: color 0.15s, background 0.15s, border-color 0.15s;
+  }
+  .st-page-btn:hover:not(:disabled):not(.st-page-btn--active) {
+    background: #252c38; color: #8a94a6;
+  }
+  .st-page-btn--active { background: #22c55e18; border-color: #22c55e40; color: #22c55e; font-weight: 600; }
+  .st-page-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .st-page-info {
+    font-size: 11px; color: #374151;
+    font-family: 'DM Sans', sans-serif; margin-left: 6px;
+  }
 `

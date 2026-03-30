@@ -3,14 +3,16 @@ import { useRef, useState } from 'react'
 /**
  * Etapa 1 — Upload CSV
  * Props:
- *   onFile(file)        called when user picks a file (before upload)
- *   uploading           bool
- *   uploadError         string
- *   columns             string[]
- *   preview             object[]
- *   totalRows           number
+ *   onFile(file)          called when user picks a file (before upload)
+ *   uploading             bool
+ *   uploadError           string
+ *   columns               string[]
+ *   preview               object[]
+ *   totalRows             number
+ *   phoneColumn           string     currently selected phone column
+ *   onPhoneColumn(col)    called when user picks the phone column
  */
-export default function UploadCSV({ onFile, uploading, uploadError, columns, preview, totalRows }) {
+export default function UploadCSV({ onFile, uploading, uploadError, columns, preview, totalRows, phoneColumn, onPhoneColumn }) {
   const inputRef  = useRef(null)
   const [dragging, setDragging] = useState(false)
 
@@ -103,6 +105,37 @@ export default function UploadCSV({ onFile, uploading, uploadError, columns, pre
             {columns.map(col => (
               <span key={col} className="ucsv-col-badge">{col}</span>
             ))}
+          </div>
+
+          {/* Phone column selector */}
+          <div className="ucsv-phone-wrap">
+            <div className="ucsv-phone-row">
+              <span className="ucsv-phone-icon">📞</span>
+              <div className="ucsv-phone-info">
+                <p className="ucsv-phone-title">Qual coluna contém o telefone?</p>
+                <p className="ucsv-phone-hint">
+                  O número deve estar no formato internacional sem <code>+</code> — ex: <code>5511999990001</code>
+                </p>
+              </div>
+              <select
+                className="ucsv-phone-select"
+                value={phoneColumn || ''}
+                onChange={e => onPhoneColumn?.(e.target.value)}
+              >
+                <option value="">— selecione —</option>
+                {columns.map(col => (
+                  <option key={col} value={col}>{col}</option>
+                ))}
+              </select>
+            </div>
+            {phoneColumn && (
+              <div className="ucsv-phone-preview">
+                <span className="ucsv-phone-preview-label">Prévia:</span>
+                {preview.slice(0, 3).map((row, i) => (
+                  <span key={i} className="ucsv-phone-sample">{row[phoneColumn] ?? '—'}</span>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Preview table */}
@@ -259,9 +292,62 @@ const CSS = `
   }
   .ucsv-tr:last-child .ucsv-td { border-bottom: none; }
 
+  /* ── Phone column selector ── */
+  .ucsv-phone-wrap {
+    margin: 0 20px;
+    background: #22c55e08;
+    border: 1px solid #22c55e25;
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .ucsv-phone-row {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  .ucsv-phone-icon { font-size: 18px; flex-shrink: 0; }
+  .ucsv-phone-info { flex: 1; min-width: 0; }
+  .ucsv-phone-title {
+    font-family: 'DM Sans', sans-serif; font-size: 13px;
+    font-weight: 600; color: #86efac; margin: 0;
+  }
+  .ucsv-phone-hint {
+    font-size: 11px; color: #4a7c59;
+    font-family: 'DM Sans', sans-serif; margin: 2px 0 0;
+  }
+  .ucsv-phone-hint code {
+    font-family: 'JetBrains Mono', monospace;
+    background: #22c55e15; border-radius: 3px; padding: 1px 4px;
+    color: #86efac;
+  }
+  .ucsv-phone-select {
+    background: #1a1f28; border: 1px solid #22c55e35;
+    border-radius: 8px; color: #e8edf5;
+    font-family: 'DM Sans', sans-serif; font-size: 13px;
+    padding: 7px 30px 7px 12px; outline: none;
+    appearance: none; cursor: pointer; flex-shrink: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6l4 4 4-4' stroke='%234a5568' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center;
+    transition: border-color 0.15s; min-width: 160px;
+  }
+  .ucsv-phone-select:focus { border-color: #22c55e60; }
+  .ucsv-phone-select option { background: #1a1f28; }
+  .ucsv-phone-preview {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .ucsv-phone-preview-label {
+    font-size: 11px; color: #4a5568; font-family: 'DM Sans', sans-serif;
+  }
+  .ucsv-phone-sample {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    color: #22c55e; background: #22c55e10;
+    border: 1px solid #22c55e25; border-radius: 5px; padding: 2px 8px;
+  }
+
   @media (max-width: 640px) {
     .ucsv-zone { padding: 32px 16px; }
     .ucsv-result-header { flex-direction: column; align-items: flex-start; }
     .ucsv-change-btn { width: 100%; text-align: center; justify-content: center; }
+    .ucsv-phone-select { width: 100%; }
+    .ucsv-phone-wrap { margin: 0 14px; }
   }
 `

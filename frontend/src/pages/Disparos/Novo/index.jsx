@@ -76,7 +76,7 @@ export default function DisparosNovo() {
 
   // Validation per step
   const stepValid = useMemo(() => ({
-    1: draft.columns.length > 0,
+    1: draft.columns.length > 0 && !!draft.phoneColumn,
     2: !!(draft.name.trim() && draft.wabaId && draft.phoneNumberId && draft.templates.length > 0),
     3: true, // personalisation is optional
     4: true,
@@ -142,7 +142,14 @@ export default function DisparosNovo() {
                 columns={draft.columns}
                 preview={draft.preview}
                 totalRows={draft.totalRows}
+                phoneColumn={draft.phoneColumn}
+                onPhoneColumn={col => setConfig({ phoneColumn: col })}
               />
+              {draft.columns.length > 0 && !draft.phoneColumn && (
+                <p className="wz-hint" style={{ color: '#f59e0b' }}>
+                  ⚠ Selecione a coluna do telefone para continuar.
+                </p>
+              )}
             </StepPanel>
           )}
 

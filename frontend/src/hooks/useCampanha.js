@@ -39,6 +39,7 @@ const INITIAL_DRAFT = {
   columns: [],
   preview: [],
   totalRows: 0,
+  phoneColumn: '',
   name: '',
   wabaId: '',
   phoneNumberId: '',
@@ -64,10 +65,11 @@ export function useCampanha() {
   const setCSVData = useCallback((data) => {
     setDraft(prev => ({
       ...prev,
-      csvFile:   data.file,
-      columns:   data.columns,
-      preview:   data.preview,
-      totalRows: data.totalRows,
+      csvFile:     data.file,
+      columns:     data.columns,
+      preview:     data.preview,
+      totalRows:   data.totalRows,
+      phoneColumn: data.phoneColumn ?? prev.phoneColumn,
       // reset downstream state when CSV changes
       personalisation: {},
     }))
