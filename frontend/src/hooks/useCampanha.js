@@ -26,9 +26,11 @@ import * as campanhaService from '../services/campanhaService'
  *   // Step 3 — Personalisation (keyed by templateId)
  *   personalisation: {
  *     [templateId]: {
- *       mediaUrl:   string
- *       fixedVars:  { [varIndex]: string }   // {{1}} → index "1"
- *       dynamicVars: { [varIndex]: string }  // column name from CSV
+ *       mediaUrl:    string
+ *       varTemplates: { [varIndex]: string }
+ *         // Free-text template per variable. May contain {{column_name}} tokens
+ *         // that are resolved per-row at dispatch time.
+ *         // Example: { "1": "Olá {{nome}}, sua fatura vence em {{data}}." }
  *     }
  *   }
  * }

@@ -176,16 +176,18 @@ async function createCampanha(userId, draft) {
   for (const slice of slices) {
     const tpl  = templateMap[slice.templateId]
     const pers = personalisation[slice.templateId] || {}
-    const { fixedVars = {}, dynamicVars = {}, mediaUrl = '' } = pers
+    const { varTemplates = {}, mediaUrl = '' } = pers
 
     for (const row of slice.contacts) {
       const phone = String(row[phoneColumn] || '').replace(/\D/g, '')
       if (!phone) continue  // skip rows with no phone
 
-      // Merge variable values: dynamic (from CSV row) overrides fixed
-      const variables = { ...fixedVars }
-      for (const [varIdx, colName] of Object.entries(dynamicVars)) {
-        if (row[colName] !== undefined) variables[varIdx] = String(row[colName])
+      // Resolve each variable template: replace {{column}} tokens with the row value
+      const variables = {}
+      for (const [varIdx, tplStr] of Object.entries(varTemplates)) {
+        variables[varIdx] = String(tplStr).replace(/\{\{([^}]+)\}\}/g, (match, col) => {
+          return row[col] !== undefined ? String(row[col]) : match
+        })
       }
 
       const contactRes = await db.execute({

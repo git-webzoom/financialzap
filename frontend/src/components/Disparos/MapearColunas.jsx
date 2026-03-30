@@ -1,14 +1,17 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 
 /**
  * Etapa 3 — Personalização por template
- * Renders one panel per selected template.
+ *
+ * Cada variável {{N}} do template vira um campo de texto livre onde o usuário
+ * pode escrever qualquer texto e inserir {{nome_coluna}} do CSV onde quiser.
+ * Ex: "Olá {{nome}}, seu vencimento é {{data}}."
  *
  * Props:
  *   templates      { templateId, name, structure }[]
- *   columns        string[]                        CSV column names
- *   preview        object[]                        first preview rows
- *   personalisation { [templateId]: { mediaUrl, fixedVars, dynamicVars } }
+ *   columns        string[]           CSV column names
+ *   preview        object[]           first preview rows
+ *   personalisation { [templateId]: { mediaUrl, varTemplates } }
  *   onChange(templateId, fields)
  */
 export default function MapearColunas({ templates, columns, preview, personalisation, onChange }) {
@@ -35,56 +38,53 @@ export default function MapearColunas({ templates, columns, preview, personalisa
 }
 
 function TemplatePanel({ tpl, idx, columns, preview, config, onChange }) {
-  const structure    = Array.isArray(tpl.structure) ? tpl.structure : []
-  const bodyComp     = structure.find(c => c.type === 'BODY')
-  const headerComp   = structure.find(c => c.type === 'HEADER')
-  const buttonsComp  = structure.find(c => c.type === 'BUTTONS')
-  const hasMedia     = headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format)
+  const structure   = Array.isArray(tpl.structure) ? tpl.structure : []
+  const bodyComp    = structure.find(c => c.type === 'BODY')
+  const headerComp  = structure.find(c => c.type === 'HEADER')
+  const buttonsComp = structure.find(c => c.type === 'BUTTONS')
+  const hasMedia    = headerComp && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerComp.format)
 
-  // Extract variable indices from body text
+  // Variable indices declared in the template body
   const varIndices = useMemo(() => {
     if (!bodyComp?.text) return []
     const matches = [...bodyComp.text.matchAll(/\{\{(\d+)\}\}/g)]
     return [...new Set(matches.map(m => Number(m[1])))].sort((a, b) => a - b)
   }, [bodyComp])
 
-  const fixedVars   = config.fixedVars   || {}
-  const dynamicVars = config.dynamicVars || {}
-  const mediaUrl    = config.mediaUrl    || ''
+  const varTemplates = config.varTemplates || {}   // { "1": "Olá {{nome}}", "2": "{{valor}}" }
+  const mediaUrl     = config.mediaUrl    || ''
 
-  function setFixed(idx, val) {
-    onChange({ fixedVars: { ...fixedVars, [String(idx)]: val } })
-  }
-  function setDynamic(idx, col) {
-    const next = { ...dynamicVars }
-    if (col === '') delete next[String(idx)]
-    else next[String(idx)] = col
-    onChange({ dynamicVars: next })
+  function setVarTemplate(varIdx, value) {
+    onChange({ varTemplates: { ...varTemplates, [String(varIdx)]: value } })
   }
   function setMedia(url) {
     onChange({ mediaUrl: url })
   }
 
-  // Live preview: replace vars in body text using first CSV row
+  // Live preview: resolve the whole body by:
+  //   1. Replace each {{N}} with the varTemplate string for that index
+  //   2. Then replace {{coluna}} tokens in that string with the first CSV row value
   const livePreview = useMemo(() => {
     if (!bodyComp?.text) return ''
     const row = preview[0] || {}
     return bodyComp.text.replace(/\{\{(\d+)\}\}/g, (_, n) => {
-      const col = dynamicVars[n]
-      if (col) return row[col] ?? `{{${n}}}`
-      return fixedVars[n] || `{{${n}}}`
+      const tplStr = varTemplates[n] || `{{${n}}}`
+      // resolve {{coluna}} references using first CSV row
+      return tplStr.replace(/\{\{([^}]+)\}\}/g, (m, col) => {
+        return row[col] !== undefined ? String(row[col]) : m
+      })
     })
-  }, [bodyComp, dynamicVars, fixedVars, preview])
+  }, [bodyComp, varTemplates, preview])
 
   return (
     <div className="mc-panel">
-      {/* Panel header */}
       <div className="mc-panel-header">
         <span className="mc-panel-num">Template {idx + 1}</span>
         <span className="mc-panel-name">{tpl.name}</span>
       </div>
 
       <div className="mc-panel-body">
+
         {/* Media URL */}
         {hasMedia && (
           <div className="mc-section">
@@ -109,31 +109,42 @@ function TemplatePanel({ tpl, idx, columns, preview, config, onChange }) {
           </div>
         )}
 
-        {/* Variables */}
+        {/* Variable fields */}
         {varIndices.length > 0 && (
           <div className="mc-section">
             <p className="mc-section-title">Variáveis da mensagem</p>
             <p className="mc-section-desc">
-              Escolha entre preencher um valor fixo (igual para todos) ou
-              mapear para uma coluna do CSV (valor diferente por contato).
+              Para cada variável, escreva o texto que será enviado.
+              Clique em um <strong>campo de coluna</strong> para inserir o valor da planilha naquele ponto.
             </p>
+
+            {/* Column chips legend */}
+            {columns.length > 0 && (
+              <div className="mc-cols-legend">
+                <span className="mc-cols-legend-label">Colunas disponíveis:</span>
+                {columns.map(col => (
+                  <span key={col} className="mc-chip mc-chip--legend">
+                    {`{{${col}}}`}
+                  </span>
+                ))}
+              </div>
+            )}
+
             <div className="mc-vars">
               {varIndices.map(vi => (
-                <VarRow
+                <VarField
                   key={vi}
                   index={vi}
                   columns={columns}
-                  fixedVal={fixedVars[String(vi)] || ''}
-                  dynamicCol={dynamicVars[String(vi)] || ''}
-                  onFixed={val => setFixed(vi, val)}
-                  onDynamic={col => setDynamic(vi, col)}
+                  value={varTemplates[String(vi)] || ''}
+                  onChange={val => setVarTemplate(vi, val)}
                 />
               ))}
             </div>
           </div>
         )}
 
-        {/* Buttons info (read-only) */}
+        {/* Buttons (read-only) */}
         {buttonsComp?.buttons?.length > 0 && (
           <div className="mc-section">
             <p className="mc-section-title">Botões <span className="mc-section-hint">somente leitura</span></p>
@@ -165,49 +176,74 @@ function TemplatePanel({ tpl, idx, columns, preview, config, onChange }) {
             </div>
           </div>
         )}
+
       </div>
     </div>
   )
 }
 
-function VarRow({ index, columns, fixedVal, dynamicCol, onFixed, onDynamic }) {
-  const mode = dynamicCol ? 'dynamic' : 'fixed'
+// ─── VarField ─────────────────────────────────────────────────────────────────
+
+/**
+ * A textarea for one template variable ({{N}}).
+ * Column chips insert {{coluna}} at the cursor position.
+ */
+function VarField({ index, columns, value, onChange }) {
+  const ref = useRef(null)
+
+  function insertColAtCursor(col) {
+    const el    = ref.current
+    if (!el) { onChange(value + `{{${col}}}`); return }
+    const start = el.selectionStart
+    const end   = el.selectionEnd
+    const token = `{{${col}}}`
+    const next  = value.slice(0, start) + token + value.slice(end)
+    onChange(next)
+    // restore cursor after the inserted token
+    setTimeout(() => {
+      el.focus()
+      el.setSelectionRange(start + token.length, start + token.length)
+    }, 0)
+  }
 
   return (
-    <div className="mc-var-row">
-      <span className="mc-var-label">{`{{${index}}}`}</span>
-      <div className="mc-var-modes">
-        <button
-          className={`mc-var-mode${mode === 'fixed' ? ' mc-var-mode--active' : ''}`}
-          onClick={() => { onDynamic(''); }}
-        >Fixo</button>
-        <button
-          className={`mc-var-mode${mode === 'dynamic' ? ' mc-var-mode--active' : ''}`}
-          onClick={() => { if (columns.length) onDynamic(columns[0]); }}
-        >CSV</button>
+    <div className="mc-var-field">
+      <div className="mc-var-field-header">
+        <span className="mc-var-label">{`{{${index}}}`}</span>
+        <span className="mc-var-hint">variável {index} do template</span>
       </div>
-      {mode === 'fixed' ? (
-        <input
-          className="mc-var-input"
-          placeholder={`Valor fixo para {{${index}}}`}
-          value={fixedVal}
-          onChange={e => onFixed(e.target.value)}
-        />
-      ) : (
-        <select
-          className="mc-var-select"
-          value={dynamicCol}
-          onChange={e => onDynamic(e.target.value)}
-        >
-          <option value="">— selecione coluna —</option>
+
+      <textarea
+        ref={ref}
+        className="mc-var-textarea"
+        rows={2}
+        placeholder={`Texto para {{${index}}}… ex: Olá {{nome}}, sua fatura vence em {{data}}.`}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+      />
+
+      {/* Column insertion chips */}
+      {columns.length > 0 && (
+        <div className="mc-chip-row">
+          <span className="mc-chip-row-label">Inserir coluna:</span>
           {columns.map(col => (
-            <option key={col} value={col}>{col}</option>
+            <button
+              key={col}
+              type="button"
+              className="mc-chip mc-chip--insert"
+              onClick={() => insertColAtCursor(col)}
+              title={`Inserir {{${col}}} no cursor`}
+            >
+              + {col}
+            </button>
           ))}
-        </select>
+        </div>
       )}
     </div>
   )
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const CSS = `
   .mc-root { display: flex; flex-direction: column; gap: 16px; }
@@ -245,43 +281,86 @@ const CSS = `
     font-family: 'DM Sans', sans-serif; font-size: 12px;
     color: #374151; margin: 0; line-height: 1.5;
   }
+  .mc-section-desc strong { color: #8a94a6; font-weight: 600; }
 
-  .mc-input, .mc-var-input, .mc-var-select {
+  /* ── Input / URL field ── */
+  .mc-input {
     background: #1a1f28; border: 1px solid #252c38;
     border-radius: 8px; color: #e8edf5;
     font-family: 'DM Sans', sans-serif; font-size: 13px;
     padding: 8px 12px; outline: none; width: 100%;
     box-sizing: border-box; transition: border-color 0.15s;
   }
-  .mc-input:focus, .mc-var-input:focus, .mc-var-select:focus { border-color: #22c55e60; }
-  .mc-var-select {
-    cursor: pointer; appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='M4 6l4 4 4-4' stroke='%234a5568' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-    background-repeat: no-repeat; background-position: right 10px center; padding-right: 30px;
-  }
-  .mc-var-select option { background: #1a1f28; }
+  .mc-input:focus { border-color: #22c55e60; }
 
-  .mc-vars { display: flex; flex-direction: column; gap: 10px; }
-  .mc-var-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  /* ── Columns legend ── */
+  .mc-cols-legend {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    padding: 8px 12px; background: #0c0f13;
+    border: 1px solid #1a1f28; border-radius: 8px;
+  }
+  .mc-cols-legend-label {
+    font-family: 'DM Sans', sans-serif; font-size: 11px; color: #4a5568;
+    white-space: nowrap;
+  }
+
+  /* ── Chips ── */
+  .mc-chip {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    border-radius: 4px; padding: 2px 7px; white-space: nowrap;
+  }
+  .mc-chip--legend {
+    background: #22c55e10; border: 1px solid #22c55e25; color: #22c55e80;
+  }
+  .mc-chip--insert {
+    background: #1a1f28; border: 1px solid #252c38; color: #8a94a6;
+    cursor: pointer; transition: background 0.12s, color 0.12s, border-color 0.12s;
+  }
+  .mc-chip--insert:hover {
+    background: #22c55e15; border-color: #22c55e40; color: #22c55e;
+  }
+
+  /* ── Variable fields ── */
+  .mc-vars { display: flex; flex-direction: column; gap: 14px; }
+
+  .mc-var-field {
+    display: flex; flex-direction: column; gap: 7px;
+    background: #0c0f13; border: 1px solid #1a1f28;
+    border-radius: 10px; padding: 12px 14px;
+  }
+  .mc-var-field-header {
+    display: flex; align-items: center; gap: 8px;
+  }
   .mc-var-label {
     font-family: 'JetBrains Mono', monospace; font-size: 12px;
     color: #22c55e; background: #22c55e10; border: 1px solid #22c55e25;
-    border-radius: 4px; padding: 3px 8px; white-space: nowrap; flex-shrink: 0;
+    border-radius: 4px; padding: 2px 8px; white-space: nowrap; flex-shrink: 0;
   }
-  .mc-var-modes {
-    display: flex; background: #0c0f13;
-    border: 1px solid #1a1f28; border-radius: 6px; padding: 2px; flex-shrink: 0;
+  .mc-var-hint {
+    font-family: 'DM Sans', sans-serif; font-size: 11px; color: #374151;
   }
-  .mc-var-mode {
-    padding: 3px 10px; border: none; border-radius: 4px;
-    background: transparent; cursor: pointer;
-    font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 500;
-    color: #4a5568; transition: color 0.15s, background 0.15s;
-  }
-  .mc-var-mode:hover:not(.mc-var-mode--active) { color: #8a94a6; }
-  .mc-var-mode--active { background: #252c38; color: #e8edf5; }
-  .mc-var-input, .mc-var-select { flex: 1; min-width: 160px; }
 
+  .mc-var-textarea {
+    background: #141820; border: 1px solid #252c38;
+    border-radius: 7px; color: #e8edf5;
+    font-family: 'DM Sans', sans-serif; font-size: 13px;
+    padding: 8px 12px; outline: none; width: 100%;
+    box-sizing: border-box; resize: vertical; line-height: 1.5;
+    transition: border-color 0.15s;
+  }
+  .mc-var-textarea:focus { border-color: #22c55e60; }
+  .mc-var-textarea::placeholder { color: #374151; }
+
+  /* ── Column insertion chips row ── */
+  .mc-chip-row {
+    display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+  }
+  .mc-chip-row-label {
+    font-family: 'DM Sans', sans-serif; font-size: 11px; color: #374151;
+    white-space: nowrap;
+  }
+
+  /* ── Buttons info ── */
   .mc-btns-info { display: flex; flex-direction: column; gap: 6px; }
   .mc-btn-info {
     display: flex; align-items: center; gap: 8px;
@@ -297,6 +376,7 @@ const CSS = `
   .mc-btn-text { font-size: 12px; color: #8a94a6; font-family: 'DM Sans', sans-serif; }
   .mc-btn-url  { font-size: 11px; color: #374151; font-family: 'JetBrains Mono', monospace; }
 
+  /* ── Live preview ── */
   .mc-preview-bubble {
     background: #dcf8c6; border-radius: 10px 2px 10px 10px;
     padding: 12px 14px; display: flex; flex-direction: column; gap: 6px;
@@ -313,7 +393,7 @@ const CSS = `
   }
 
   @media (max-width: 640px) {
-    .mc-var-row { flex-direction: column; align-items: flex-start; }
-    .mc-var-input, .mc-var-select { min-width: 100%; }
+    .mc-chip-row { gap: 4px; }
+    .mc-var-textarea { font-size: 12px; }
   }
 `

@@ -63,7 +63,7 @@ export default function DisparosNovo() {
       await templateService.sendTestMessage(firstTpl.templateId, {
         phone_number_id: draft.phoneNumberId,
         to: toPhone,
-        variables:  { ...(pers.fixedVars || {}), ...(pers.dynamicVars || {}) },
+        variables:  pers.varTemplates || {},
         media_url:  pers.mediaUrl || '',
       })
       setTestResult({ ok: true })

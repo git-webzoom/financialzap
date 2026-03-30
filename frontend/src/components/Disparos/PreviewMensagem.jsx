@@ -110,17 +110,12 @@ export default function PreviewMensagem({ draft, wabas = [], phones = [], onTest
                     </div>
                   </div>
 
-                  {/* Variable mapping summary */}
-                  {(Object.keys(pers.fixedVars || {}).length > 0 || Object.keys(pers.dynamicVars || {}).length > 0) && (
+                  {/* Variable templates summary */}
+                  {Object.keys(pers.varTemplates || {}).length > 0 && (
                     <div className="pm-vars-summary">
-                      {Object.entries(pers.fixedVars || {}).map(([k, v]) => (
-                        <span key={`f${k}`} className="pm-var-tag pm-var-tag--fixed">
-                          {`{{${k}}}`} = "{v}"
-                        </span>
-                      ))}
-                      {Object.entries(pers.dynamicVars || {}).map(([k, col]) => (
-                        <span key={`d${k}`} className="pm-var-tag pm-var-tag--dynamic">
-                          {`{{${k}}}`} ← coluna "{col}"
+                      {Object.entries(pers.varTemplates).map(([k, tplStr]) => (
+                        <span key={k} className="pm-var-tag pm-var-tag--dynamic">
+                          {`{{${k}}}`} → {tplStr.length > 40 ? tplStr.slice(0, 40) + '…' : tplStr}
                         </span>
                       ))}
                     </div>
