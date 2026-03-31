@@ -26,8 +26,38 @@ const metaApi = axios.create({ baseURL: `${BASE_URL}/${API_VERSION}` })
  */
 async function getWabasFromToken(accessToken) {
   const wabaMap = {} // waba_id → name, deduplicates across strategies
+  const log = (tag, msg) => console.log(`[getWabasFromToken] ${tag}: ${msg}`)
 
-  // ── Strategy 1: businesses → owned WABAs ────────────────────────────────────
+  // ── Resolve /me first — needed by multiple strategies ───────────────────────
+  let meId = null
+  try {
+    const { data: me } = await metaApi.get('/me', {
+      params: { fields: 'id,name', access_token: accessToken },
+    })
+    meId = me.id
+    log('me', `id=${me.id} name=${me.name}`)
+  } catch (err) {
+    log('me', `failed: ${err.response?.data?.error?.message || err.message}`)
+  }
+
+  // ── Strategy 1: System User assigned WABAs ───────────────────────────────────
+  // Most common for permanent System User tokens used in WhatsApp integrations.
+  if (meId) {
+    try {
+      const { data } = await metaApi.get(`/${meId}/assigned_whatsapp_business_accounts`, {
+        params: { fields: 'id,name', access_token: accessToken, limit: 100 },
+      })
+      for (const w of data.data || []) {
+        wabaMap[w.id] = w.name || w.id
+      }
+      log('strategy1 assigned_wabas', `found ${Object.keys(wabaMap).length}`)
+    } catch (err) {
+      log('strategy1 assigned_wabas', `failed: ${err.response?.data?.error?.message || err.message}`)
+    }
+  }
+
+  // ── Strategy 2: Business portfolio → owned WABAs ────────────────────────────
+  // Works for User tokens and admin System User tokens with business_management.
   try {
     const { data: bmData } = await metaApi.get('/me/businesses', {
       params: {
@@ -41,52 +71,69 @@ async function getWabasFromToken(accessToken) {
         wabaMap[w.id] = w.name || w.id
       }
     }
-  } catch {
-    // token type doesn't support /me/businesses — continue
+    log('strategy2 businesses', `found ${Object.keys(wabaMap).length} total`)
+  } catch (err) {
+    log('strategy2 businesses', `failed: ${err.response?.data?.error?.message || err.message}`)
   }
 
-  // ── Strategy 2: direct WABA list ────────────────────────────────────────────
+  // ── Strategy 3: direct /me/whatsapp_business_accounts ───────────────────────
+  // Works for tokens with whatsapp_business_management permission granted directly.
   try {
     const { data: wabaData } = await metaApi.get('/me/whatsapp_business_accounts', {
-      params: {
-        fields: 'id,name',
-        access_token: accessToken,
-        limit: 100,
-      },
+      params: { fields: 'id,name', access_token: accessToken, limit: 100 },
     })
     for (const w of wabaData.data || []) {
       wabaMap[w.id] = w.name || w.id
     }
-  } catch {
-    // token type doesn't support this endpoint — continue
+    log('strategy3 me/wabas', `found ${Object.keys(wabaMap).length} total`)
+  } catch (err) {
+    log('strategy3 me/wabas', `failed: ${err.response?.data?.error?.message || err.message}`)
   }
 
-  // ── Strategy 3: token is scoped to a WABA directly ──────────────────────────
-  if (!Object.keys(wabaMap).length) {
+  // ── Strategy 4: Business Manager WABAs via /{bm_id}/whatsapp_business_accounts
+  // Needed when the token belongs to an admin of a BM that owns WABAs.
+  if (!Object.keys(wabaMap).length && meId) {
     try {
-      const { data: me } = await metaApi.get('/me', {
-        params: { fields: 'id,name', access_token: accessToken },
+      const { data: bmList } = await metaApi.get(`/${meId}/businesses`, {
+        params: { fields: 'id', access_token: accessToken, limit: 100 },
       })
-      // If /me returns an object that looks like a WABA (has an id), try it as a WABA
-      if (me.id) {
+      for (const bm of bmList.data || []) {
         try {
-          const info = await getWabaInfo(me.id, accessToken)
-          // getWabaInfo succeeds only if id is a valid WABA — has currency or timezone fields
-          if (info.currency || info.timezone_id || info.name) {
-            wabaMap[me.id] = info.name || me.id
+          const { data: wabaList } = await metaApi.get(`/${bm.id}/whatsapp_business_accounts`, {
+            params: { fields: 'id,name', access_token: accessToken, limit: 100 },
+          })
+          for (const w of wabaList.data || []) {
+            wabaMap[w.id] = w.name || w.id
           }
-        } catch {
-          // not a WABA node
+        } catch (err2) {
+          log('strategy4 bm_wabas', `bm=${bm.id} failed: ${err2.response?.data?.error?.message || err2.message}`)
         }
       }
-    } catch {
-      // ignore
+      log('strategy4 bm_wabas', `found ${Object.keys(wabaMap).length} total`)
+    } catch (err) {
+      log('strategy4 bm_wabas', `failed: ${err.response?.data?.error?.message || err.message}`)
     }
   }
 
+  // ── Strategy 5: /me itself is a WABA node ───────────────────────────────────
+  // Handles tokens permanently scoped to a single WABA.
+  if (!Object.keys(wabaMap).length && meId) {
+    try {
+      const info = await getWabaInfo(meId, accessToken)
+      if (info.currency || info.timezone_id || info.name) {
+        wabaMap[meId] = info.name || meId
+        log('strategy5 me_as_waba', `found waba ${meId}`)
+      }
+    } catch (err) {
+      log('strategy5 me_as_waba', `failed: ${err.response?.data?.error?.message || err.message}`)
+    }
+  }
+
+  log('result', `total WABAs found: ${Object.keys(wabaMap).length}`)
+
   if (!Object.keys(wabaMap).length) {
     throw Object.assign(
-      new Error('Nenhuma WABA encontrada para este token. Verifique se o token possui as permissões whatsapp_business_management ou business_management.'),
+      new Error('Nenhuma WABA encontrada para este token. Verifique as permissões e tente novamente.'),
       { status: 422 }
     )
   }
