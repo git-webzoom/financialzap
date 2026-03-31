@@ -4,8 +4,8 @@
  * with individual contact statuses and a CSV export button.
  * Active campaigns update via ProgressoDisparo (real-time polling).
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { listCampanhas, getCampanhaContacts } from '../../../services/campanhaService'
+import { useCallback, useEffect, useState } from 'react'
+import { listCampanhas, getCampanhaContacts, cancelCampanha, deleteCampanha } from '../../../services/campanhaService'
 import ProgressoDisparo from '../../../components/Disparos/ProgressoDisparo'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -19,6 +19,7 @@ const STATUS_LABEL = {
   done:             'Concluído',
   done_with_errors: 'Com erros',
   failed:           'Falhou',
+  cancelled:        'Cancelado',
 }
 
 const STATUS_COLOR = {
@@ -28,6 +29,7 @@ const STATUS_COLOR = {
   done:             '#22c55e',
   done_with_errors: '#f97316',
   failed:           '#ef4444',
+  cancelled:        '#6b7280',
 }
 
 const CONTACT_STATUS_COLOR = {
@@ -92,8 +94,11 @@ export default function DisparosHistorico() {
   const [ctxPage,   setCtxPage]   = useState(1)
   const [ctxLoading, setCtxLoading] = useState(false)
 
-  // Export state
-  const [exporting, setExporting] = useState(false)
+  // Export / cancel / delete state
+  const [exporting,  setExporting]  = useState(false)
+  const [cancelling, setCancelling] = useState(false)
+  const [deleting,   setDeleting]   = useState(false)
+  const [actionError, setActionError] = useState(null)
 
   async function load() {
     setLoading(true)
@@ -139,6 +144,38 @@ export default function DisparosHistorico() {
   useEffect(() => {
     if (selected) loadContacts(selected, ctxPage, ctxFilter)
   }, [ctxFilter, ctxPage]) // eslint-disable-line
+
+  async function handleCancel() {
+    if (!selected) return
+    if (!window.confirm(`Cancelar a campanha "${selected.name}"? Os disparos pendentes serão removidos.`)) return
+    setCancelling(true)
+    setActionError(null)
+    try {
+      await cancelCampanha(selected.id)
+      await load()
+      closeDetail()
+    } catch (err) {
+      setActionError(err.response?.data?.error || err.message)
+    } finally {
+      setCancelling(false)
+    }
+  }
+
+  async function handleDelete() {
+    if (!selected) return
+    if (!window.confirm(`Apagar permanentemente a campanha "${selected.name}"? Esta ação não pode ser desfeita.`)) return
+    setDeleting(true)
+    setActionError(null)
+    try {
+      await deleteCampanha(selected.id)
+      await load()
+      closeDetail()
+    } catch (err) {
+      setActionError(err.response?.data?.error || err.message)
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   async function handleExport() {
     if (!selected) return
@@ -205,6 +242,11 @@ export default function DisparosHistorico() {
                 onPage={setCtxPage}
                 onExport={handleExport}
                 exporting={exporting}
+                onCancel={handleCancel}
+                cancelling={cancelling}
+                onDelete={handleDelete}
+                deleting={deleting}
+                actionError={actionError}
                 onClose={closeDetail}
               />
             </div>
@@ -281,8 +323,10 @@ function Counter({ label, value, color }) {
 
 // ─── DetailPanel ──────────────────────────────────────────────────────────────
 
-function DetailPanel({ campaign, contacts, meta, loading, filter, onFilter, page, onPage, onExport, exporting, onClose }) {
+function DetailPanel({ campaign, contacts, meta, loading, filter, onFilter, page, onPage, onExport, exporting, onCancel, cancelling, onDelete, deleting, actionError, onClose }) {
   const color = STATUS_COLOR[campaign.status] || '#4a5568'
+  const canCancel = ['pending', 'scheduled', 'running'].includes(campaign.status)
+  const canDelete = campaign.status !== 'running'
 
   const FILTERS = [
     { value: '',          label: 'Todos' },
@@ -310,6 +354,25 @@ function DetailPanel({ campaign, contacts, meta, loading, filter, onFilter, page
         </div>
       </div>
 
+      {/* Action buttons */}
+      <div className="dp-actions">
+        {canCancel && (
+          <button className="ht-btn ht-btn--warn" onClick={onCancel} disabled={cancelling || deleting}>
+            {cancelling ? <Spinner /> : '⏹'} Cancelar disparo
+          </button>
+        )}
+        {canDelete && (
+          <button className="ht-btn ht-btn--danger" onClick={onDelete} disabled={deleting || cancelling}>
+            {deleting ? <Spinner /> : '🗑'} Apagar campanha
+          </button>
+        )}
+      </div>
+
+      {/* Action error */}
+      {actionError && (
+        <div className="ht-banner ht-banner--err">⚠ {actionError}</div>
+      )}
+
       {/* Progress (live for active campaigns) */}
       {ACTIVE.has(campaign.status) && (
         <div style={{ padding: '0 0 4px' }}>
@@ -317,7 +380,7 @@ function DetailPanel({ campaign, contacts, meta, loading, filter, onFilter, page
         </div>
       )}
 
-      {/* Static stats for finished campaigns */}
+      {/* Static stats for finished/cancelled campaigns */}
       {!ACTIVE.has(campaign.status) && (
         <div className="dp-stats">
           <StatBox label="Total"     value={campaign.total_contacts} />
@@ -434,6 +497,10 @@ const CSS = `
   .ht-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .ht-btn--secondary { background: #1a1f28; border-color: #252c38; color: #8a94a6; }
   .ht-btn--secondary:hover:not(:disabled) { background: #252c38; color: #e8edf5; }
+  .ht-btn--warn   { background: #f59e0b18; border-color: #f59e0b40; color: #f59e0b; }
+  .ht-btn--warn:hover:not(:disabled)   { background: #f59e0b25; }
+  .ht-btn--danger { background: #ef444418; border-color: #ef444440; color: #f87171; }
+  .ht-btn--danger:hover:not(:disabled) { background: #ef444428; }
 
   /* ── Spinner ── */
   .ht-spinner {
@@ -541,6 +608,8 @@ const CSS = `
     font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center;
   }
   .dp-close:hover { background: #252c38; color: #e8edf5; }
+
+  .dp-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
   .dp-stats {
     display: flex; gap: 12px; flex-wrap: wrap;

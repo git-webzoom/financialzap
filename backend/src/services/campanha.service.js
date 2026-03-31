@@ -348,4 +348,84 @@ async function listCampanhas(userId) {
   return rows.rows
 }
 
-module.exports = { divideContacts, createCampanha, getCampanhaStatus, listCampanhas, getCampanhaContacts }
+// ─── Cancel campaign ──────────────────────────────────────────────────────────
+
+/**
+ * Cancels a campaign: removes pending/delayed BullMQ jobs and marks the
+ * campaign as 'cancelled'. Only allowed when status is pending/scheduled/running.
+ */
+async function cancelCampanha(userId, campaignId) {
+  const db = getDb()
+
+  // Verify ownership + status
+  const res = await db.execute({
+    sql: 'SELECT id, status FROM campaigns WHERE id = ? AND user_id = ?',
+    args: [campaignId, userId],
+  })
+  if (!res.rows.length) throw new Error('Campanha não encontrada.')
+  const { status } = res.rows[0]
+  if (!['pending', 'scheduled', 'running'].includes(status)) {
+    throw new Error(`Não é possível cancelar uma campanha com status "${status}".`)
+  }
+
+  // Remove BullMQ jobs that haven't fired yet (delayed + waiting)
+  try {
+    const states = ['delayed', 'waiting', 'prioritized']
+    for (const state of states) {
+      const jobs = await disparosQueue.getJobs([state], 0, -1)
+      const toRemove = jobs.filter(j => j.data?.campaignId === campaignId)
+      await Promise.all(toRemove.map(j => j.remove().catch(() => {})))
+    }
+  } catch {
+    // BullMQ removal is best-effort — DB update is authoritative
+  }
+
+  // Mark pending contacts as cancelled
+  await db.execute({
+    sql: `UPDATE campaign_contacts SET status = 'cancelled'
+          WHERE campaign_id = ? AND status = 'pending'`,
+    args: [campaignId],
+  })
+
+  await db.execute({
+    sql: `UPDATE campaigns SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    args: [campaignId],
+  })
+}
+
+// ─── Delete campaign ──────────────────────────────────────────────────────────
+
+/**
+ * Deletes a campaign and all its contacts (cascade).
+ * If the campaign is still active (running), it must be cancelled first.
+ */
+async function deleteCampanha(userId, campaignId) {
+  const db = getDb()
+
+  const res = await db.execute({
+    sql: 'SELECT id, status FROM campaigns WHERE id = ? AND user_id = ?',
+    args: [campaignId, userId],
+  })
+  if (!res.rows.length) throw new Error('Campanha não encontrada.')
+  const { status } = res.rows[0]
+
+  // Auto-cancel before deleting if still active
+  if (['pending', 'scheduled', 'running'].includes(status)) {
+    await cancelCampanha(userId, campaignId)
+  }
+
+  await db.execute({
+    sql: 'DELETE FROM campaigns WHERE id = ?',
+    args: [campaignId],
+  })
+}
+
+module.exports = {
+  divideContacts,
+  createCampanha,
+  getCampanhaStatus,
+  listCampanhas,
+  getCampanhaContacts,
+  cancelCampanha,
+  deleteCampanha,
+}

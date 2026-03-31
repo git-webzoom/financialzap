@@ -52,3 +52,14 @@ export async function getCampanhaContacts(campaignId, params = {}) {
   const { data } = await api.get(`/api/campanhas/${campaignId}/contacts`, { params })
   return data
 }
+
+/** PATCH /api/campanhas/:id/cancel — cancels a pending/scheduled/running campaign */
+export async function cancelCampanha(campaignId) {
+  const { data } = await api.patch(`/api/campanhas/${campaignId}/cancel`)
+  return data
+}
+
+/** DELETE /api/campanhas/:id — permanently deletes a campaign and all its contacts */
+export async function deleteCampanha(campaignId) {
+  await api.delete(`/api/campanhas/${campaignId}`)
+}
