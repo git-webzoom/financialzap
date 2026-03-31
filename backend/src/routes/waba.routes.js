@@ -5,7 +5,10 @@ const ctrl = require('../controllers/waba.controller')
 // All WABA routes require a valid JWT
 router.use(authMiddleware)
 
-// Connect a new WABA via Embedded Signup OAuth token
+// Lookup WABAs accessible by a token (before connecting)
+router.post('/lookup', ctrl.lookup)
+
+// Connect a new WABA via token + waba_id
 router.post('/connect', ctrl.connect)
 
 // List all WABAs of the authenticated user (grouped by Business Manager)

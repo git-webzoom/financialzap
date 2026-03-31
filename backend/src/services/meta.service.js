@@ -5,6 +5,71 @@ const API_VERSION = process.env.META_API_VERSION || 'v20.0'
 
 const metaApi = axios.create({ baseURL: `${BASE_URL}/${API_VERSION}` })
 
+// ─── WABAs from token ─────────────────────────────────────────────────────────
+
+/**
+ * List all WABAs accessible by an access token.
+ * Uses /me?fields=granular_scopes to find WABA IDs, then fetches each WABA's name.
+ * Returns: [{ waba_id, name }]
+ */
+async function getWabasFromToken(accessToken) {
+  // Step 1: get the user ID this token belongs to
+  const { data: meData } = await metaApi.get('/me', {
+    params: {
+      fields: 'id,name,granular_scopes',
+      access_token: accessToken,
+    },
+  })
+
+  // granular_scopes includes whatsapp_business_management with target_ids = waba_ids
+  const wabaIds = []
+  if (Array.isArray(meData.granular_scopes)) {
+    for (const scope of meData.granular_scopes) {
+      if (scope.scope === 'whatsapp_business_management' && Array.isArray(scope.target_ids)) {
+        wabaIds.push(...scope.target_ids)
+      }
+    }
+  }
+
+  // If granular_scopes didn't yield results, try fetching WABAs from business accounts
+  if (!wabaIds.length) {
+    // Try fetching WABAs via the token owner's business accounts
+    try {
+      const { data: bmData } = await metaApi.get('/me/businesses', {
+        params: {
+          fields: 'id,name,owned_whatsapp_business_accounts{id,name}',
+          access_token: accessToken,
+        },
+      })
+      for (const bm of bmData.data || []) {
+        for (const waba of bm.owned_whatsapp_business_accounts?.data || []) {
+          wabaIds.push(waba.id)
+        }
+      }
+    } catch {
+      // ignore — will return empty list
+    }
+  }
+
+  // Deduplicate
+  const uniqueIds = [...new Set(wabaIds)]
+
+  // Step 2: fetch name for each WABA
+  const results = await Promise.all(
+    uniqueIds.map(async (id) => {
+      try {
+        const info = await getWabaInfo(id, accessToken)
+        return { waba_id: id, name: info.name || id }
+      } catch {
+        // If we can't fetch info, still return the id so user can connect it
+        return { waba_id: id, name: id }
+      }
+    })
+  )
+
+  return results
+}
+
 // ─── WABA info ────────────────────────────────────────────────────────────────
 
 /**
@@ -111,6 +176,7 @@ async function sendMessage(phoneNumberId, accessToken, payload) {
 }
 
 module.exports = {
+  getWabasFromToken,
   getWabaInfo,
   getPhoneNumbers,
   getPhoneNumberInfo,

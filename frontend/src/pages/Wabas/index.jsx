@@ -125,7 +125,7 @@ function EmptyState() {
       </div>
       <p className="wabas-empty-title">Nenhuma WABA conectada</p>
       <p className="wabas-empty-sub">
-        Informe o <strong>Token de Acesso</strong> e o <strong>WABA ID</strong> acima para conectar sua conta WhatsApp Business.
+        Informe o <strong>Token de Acesso</strong> acima e clique em <strong>Buscar WABAs</strong> para conectar sua conta WhatsApp Business.
       </p>
     </div>
   )

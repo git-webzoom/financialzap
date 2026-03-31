@@ -1,4 +1,22 @@
-const wabaService = require('../services/waba.service')
+const wabaService   = require('../services/waba.service')
+const metaService   = require('../services/meta.service')
+
+// POST /api/wabas/lookup
+// Body: { access_token }
+// Returns: { wabas: [{ waba_id, name }] }
+async function lookup(req, res) {
+  const { access_token } = req.body
+  if (!access_token) {
+    return res.status(400).json({ error: 'access_token é obrigatório.' })
+  }
+  try {
+    const wabas = await metaService.getWabasFromToken(access_token)
+    return res.json({ wabas })
+  } catch (err) {
+    const metaMsg = err.response?.data?.error?.message || err.message || 'Erro ao consultar a Meta.'
+    return res.status(err.response?.status || 500).json({ error: metaMsg })
+  }
+}
 
 // POST /api/wabas/connect
 // Body: { access_token, waba_id }
@@ -77,4 +95,4 @@ async function sync(req, res) {
   }
 }
 
-module.exports = { connect, list, revoke, phoneNumbers, sync }
+module.exports = { lookup, connect, list, revoke, phoneNumbers, sync }
