@@ -3,14 +3,24 @@ const multer = require('multer')
 // Store CSV in memory (no disk writes) — max 10 MB
 const storage = multer.memoryStorage()
 
-function fileFilter(_req, file, cb) {
-  const allowed = ['text/csv', 'application/csv', 'application/vnd.ms-excel', 'text/plain']
-  const extOk = file.originalname.toLowerCase().endsWith('.csv')
+const ALLOWED_MIMES = [
+  'text/csv',
+  'application/csv',
+  'text/plain',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
+  'application/vnd.oasis.opendocument.spreadsheet',                    // ods
+]
 
-  if (allowed.includes(file.mimetype) || extOk) {
+const ALLOWED_EXTS = ['.csv', '.xlsx', '.xls', '.ods']
+
+function fileFilter(_req, file, cb) {
+  const ext = '.' + file.originalname.toLowerCase().split('.').pop()
+  const ok  = ALLOWED_MIMES.includes(file.mimetype) || ALLOWED_EXTS.includes(ext)
+  if (ok) {
     cb(null, true)
   } else {
-    cb(new Error('Somente arquivos CSV são permitidos'), false)
+    cb(new Error('Formato não suportado. Envie um arquivo CSV ou planilha Excel (.xlsx, .xls).'), false)
   }
 }
 

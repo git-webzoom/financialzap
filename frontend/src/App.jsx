@@ -7,7 +7,6 @@ import Wabas from './pages/Wabas'
 import Templates from './pages/Templates'
 import DisparosNovo from './pages/Disparos/Novo'
 import DisparosHistorico from './pages/Disparos/Historico'
-import Aquecimento from './pages/Aquecimento'
 import Configuracoes from './pages/Configuracoes'
 
 // Layout
@@ -43,7 +42,6 @@ export default function App() {
           <Route path="templates"           element={<Templates />} />
           <Route path="disparos/novo"       element={<DisparosNovo />} />
           <Route path="disparos/historico"  element={<DisparosHistorico />} />
-          <Route path="aquecimento"         element={<Aquecimento />} />
           <Route path="configuracoes"       element={<Configuracoes />} />
         </Route>
 

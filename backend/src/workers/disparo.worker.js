@@ -73,6 +73,15 @@ async function processJob(job) {
     variables, mediaUrl, structure,
   } = job.data
 
+  // Skip if contact was cancelled while job was waiting in queue
+  const contactRow = await db.execute({
+    sql: 'SELECT status FROM campaign_contacts WHERE id = ?',
+    args: [contactId],
+  })
+  if (contactRow.rows.length && contactRow.rows[0].status === 'cancelled') {
+    return  // silently discard — campaign was cancelled
+  }
+
   // Get decrypted token for this WABA
   const wabaRows = await db.execute({
     sql: 'SELECT access_token_enc FROM wabas WHERE waba_id = ?',

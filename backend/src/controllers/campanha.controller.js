@@ -12,7 +12,7 @@ async function uploadCSV(req, res) {
   }
 
   try {
-    const result = parseCSV(req.file.buffer)
+    const result = parseCSV(req.file.buffer, req.file.mimetype, req.file.originalname)
     return res.json(result)
   } catch (err) {
     return res.status(422).json({ error: err.message || 'Erro ao processar o arquivo CSV.' })

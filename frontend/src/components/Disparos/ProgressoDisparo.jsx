@@ -15,6 +15,7 @@ const STATUS_LABEL = {
   done:             'Concluído',
   done_with_errors: 'Concluído com erros',
   failed:           'Falhou',
+  cancelled:        'Cancelado',
 }
 
 const STATUS_COLOR = {
@@ -24,6 +25,7 @@ const STATUS_COLOR = {
   done:             '#22c55e',
   done_with_errors: '#f97316',
   failed:           '#ef4444',
+  cancelled:        '#6b7280',
 }
 
 /**
@@ -36,7 +38,7 @@ export default function ProgressoDisparo({ campaignId, compact = false }) {
   const [error, setError]     = useState(null)
   const timerRef              = useRef(null)
 
-  const isActive = (s) => s === 'running' || s === 'scheduled' || s === 'pending'
+  const isActive = (s) => s === 'running' || s === 'pending'
 
   async function poll() {
     try {
@@ -45,8 +47,10 @@ export default function ProgressoDisparo({ campaignId, compact = false }) {
       if (isActive(res.status)) {
         timerRef.current = setTimeout(poll, POLL_INTERVAL)
       }
+      // 'scheduled', 'done', 'done_with_errors', 'failed', 'cancelled' → para o polling
     } catch (err) {
       setError(err.response?.data?.error || err.message)
+      // não reagenda em caso de erro
     }
   }
 

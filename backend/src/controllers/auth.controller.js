@@ -1,5 +1,28 @@
 const authService = require('../services/auth.service')
 
+// ─── GET /api/auth/me ─────────────────────────────────────────────────────────
+
+async function getMe(req, res) {
+  try {
+    const profile = await authService.getProfile(req.user.sub)
+    return res.json(profile)
+  } catch (err) {
+    return res.status(err.status || 500).json({ error: err.message })
+  }
+}
+
+// ─── PATCH /api/auth/me ───────────────────────────────────────────────────────
+
+async function updateMe(req, res) {
+  try {
+    const { name, email, currentPassword, newPassword } = req.body
+    const profile = await authService.updateProfile(req.user.sub, { name, email, currentPassword, newPassword })
+    return res.json(profile)
+  } catch (err) {
+    return res.status(err.status || 500).json({ error: err.message })
+  }
+}
+
 // ─── POST /api/auth/register ──────────────────────────────────────────────────
 
 async function register(req, res) {
@@ -57,4 +80,4 @@ function logout(_req, res) {
   return res.status(200).json({ message: 'Logged out successfully' })
 }
 
-module.exports = { register, login, logout }
+module.exports = { register, login, logout, getMe, updateMe }

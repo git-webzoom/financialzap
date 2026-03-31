@@ -19,3 +19,13 @@ export async function logout() {
     localStorage.removeItem('user')
   }
 }
+
+export async function getMe() {
+  const { data } = await api.get('/api/auth/me')
+  return data
+}
+
+export async function updateMe(fields) {
+  const { data } = await api.patch('/api/auth/me', fields)
+  return data
+}

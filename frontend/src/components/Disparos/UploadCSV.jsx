@@ -49,7 +49,7 @@ export default function UploadCSV({ onFile, uploading, uploadError, columns, pre
           <input
             ref={inputRef}
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,.xlsx,.xls,.ods,text/csv"
             style={{ display: 'none' }}
             onChange={e => handleFiles(e.target.files)}
           />
@@ -61,8 +61,8 @@ export default function UploadCSV({ onFile, uploading, uploadError, columns, pre
           ) : (
             <>
               <div className="ucsv-icon"><IconCSV /></div>
-              <p className="ucsv-label">Arraste o CSV aqui ou <span className="ucsv-link">clique para selecionar</span></p>
-              <p className="ucsv-hint">Apenas arquivos .csv · Máximo 10 MB</p>
+              <p className="ucsv-label">Arraste o arquivo aqui ou <span className="ucsv-link">clique para selecionar</span></p>
+              <p className="ucsv-hint">CSV ou planilha Excel (.xlsx, .xls) · Máximo 10 MB</p>
             </>
           )}
         </div>
@@ -94,7 +94,7 @@ export default function UploadCSV({ onFile, uploading, uploadError, columns, pre
             <input
               ref={inputRef}
               type="file"
-              accept=".csv,text/csv"
+              accept=".csv,.xlsx,.xls,.ods,text/csv"
               style={{ display: 'none' }}
               onChange={e => handleFiles(e.target.files)}
             />

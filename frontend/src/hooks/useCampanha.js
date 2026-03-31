@@ -117,6 +117,8 @@ export function useCampanha() {
   const uploadFile = useCallback(async (file) => {
     setUploading(true)
     setUploadError('')
+    // Reset CSV state immediately so stale columns from the previous file never show
+    setDraft(prev => ({ ...prev, columns: [], preview: [], csvRows: [], totalRows: 0, phoneColumn: '' }))
     try {
       const result = await campanhaService.uploadCSV(file)
       setCSVData({ file, columns: result.columns, preview: result.preview, csvRows: result.rows, totalRows: result.total_rows })

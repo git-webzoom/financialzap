@@ -7,7 +7,6 @@ const NAV = [
   { to: '/templates',          label: 'Templates',     icon: IconDoc   },
   { to: '/disparos/novo',      label: 'Novo Disparo',  icon: IconSend  },
   { to: '/disparos/historico', label: 'Histórico',     icon: IconClock },
-  { to: '/aquecimento',        label: 'Aquecimento',   icon: IconFlame },
   { to: '/configuracoes',      label: 'Configurações', icon: IconGear  },
 ]
 
@@ -138,13 +137,6 @@ function IconClock() {
   )
 }
 
-function IconFlame() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-      <path d="M10 18c-3.5 0-6-2.5-6-6 0-2.5 1.5-4.5 3-5.5 0 1.5.5 2.5 1.5 3C8.5 7 9.5 3.5 12 2c0 2.5.5 4-1 6 1.5-1 2-2.5 2-2.5 2 1.5 2 4 2 5.5 0 3-2.5 5-5 5z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"/>
-    </svg>
-  )
-}
 
 function IconGear() {
   return (

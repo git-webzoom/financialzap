@@ -10,7 +10,8 @@ import ProgressoDisparo from '../../../components/Disparos/ProgressoDisparo'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-const ACTIVE = new Set(['running', 'scheduled', 'pending'])
+// Only truly active statuses that need live polling — 'scheduled' does NOT poll
+const ACTIVE = new Set(['running', 'pending'])
 
 const STATUS_LABEL = {
   pending:          'Pendente',
@@ -106,6 +107,12 @@ export default function DisparosHistorico() {
     try {
       const data = await listCampanhas()
       setCampaigns(data)
+      // Keep selected panel in sync with fresh data
+      setSelected(prev => {
+        if (!prev) return prev
+        const updated = data.find(c => c.id === prev.id)
+        return updated || prev
+      })
     } catch (err) {
       setError(err.response?.data?.error || err.message)
     } finally {
@@ -147,13 +154,16 @@ export default function DisparosHistorico() {
 
   async function handleCancel() {
     if (!selected) return
-    if (!window.confirm(`Cancelar a campanha "${selected.name}"? Os disparos pendentes serão removidos.`)) return
+    if (!window.confirm(`Cancelar a campanha "${selected.name}"? Os disparos pendentes serão interrompidos.`)) return
     setCancelling(true)
     setActionError(null)
     try {
       await cancelCampanha(selected.id)
-      await load()
-      closeDetail()
+      // Reload list and update panel with new status
+      const data = await listCampanhas()
+      setCampaigns(data)
+      const updated = data.find(c => c.id === selected.id)
+      if (updated) setSelected(updated)
     } catch (err) {
       setActionError(err.response?.data?.error || err.message)
     } finally {
@@ -168,7 +178,9 @@ export default function DisparosHistorico() {
     setActionError(null)
     try {
       await deleteCampanha(selected.id)
-      await load()
+      // Reload list and close panel (campaign no longer exists)
+      const data = await listCampanhas()
+      setCampaigns(data)
       closeDetail()
     } catch (err) {
       setActionError(err.response?.data?.error || err.message)
@@ -326,7 +338,7 @@ function Counter({ label, value, color }) {
 function DetailPanel({ campaign, contacts, meta, loading, filter, onFilter, page, onPage, onExport, exporting, onCancel, cancelling, onDelete, deleting, actionError, onClose }) {
   const color = STATUS_COLOR[campaign.status] || '#4a5568'
   const canCancel = ['pending', 'scheduled', 'running'].includes(campaign.status)
-  const canDelete = campaign.status !== 'running'
+  const canDelete = true  // backend auto-cancels running campaigns before deleting
 
   const FILTERS = [
     { value: '',          label: 'Todos' },
@@ -373,15 +385,28 @@ function DetailPanel({ campaign, contacts, meta, loading, filter, onFilter, page
         <div className="ht-banner ht-banner--err">⚠ {actionError}</div>
       )}
 
-      {/* Progress (live for active campaigns) */}
+      {/* Live progress for running/pending campaigns */}
       {ACTIVE.has(campaign.status) && (
         <div style={{ padding: '0 0 4px' }}>
           <ProgressoDisparo campaignId={campaign.id} />
         </div>
       )}
 
+      {/* Scheduled campaign info */}
+      {campaign.status === 'scheduled' && (
+        <div className="dp-stats">
+          <StatBox label="Total contatos" value={campaign.total_contacts} />
+          {campaign.scheduled_at && (
+            <div className="dp-stat">
+              <span className="dp-stat-val" style={{ color: '#f59e0b', fontSize: 14 }}>{fmtDate(campaign.scheduled_at)}</span>
+              <span className="dp-stat-lbl">Agendado para</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Static stats for finished/cancelled campaigns */}
-      {!ACTIVE.has(campaign.status) && (
+      {!ACTIVE.has(campaign.status) && campaign.status !== 'scheduled' && (
         <div className="dp-stats">
           <StatBox label="Total"     value={campaign.total_contacts} />
           <StatBox label="Enviados"  value={campaign.sent}           color="#22c55e" />

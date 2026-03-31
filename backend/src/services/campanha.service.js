@@ -368,19 +368,8 @@ async function cancelCampanha(userId, campaignId) {
     throw new Error(`Não é possível cancelar uma campanha com status "${status}".`)
   }
 
-  // Remove BullMQ jobs that haven't fired yet (delayed + waiting)
-  try {
-    const states = ['delayed', 'waiting', 'prioritized']
-    for (const state of states) {
-      const jobs = await disparosQueue.getJobs([state], 0, -1)
-      const toRemove = jobs.filter(j => j.data?.campaignId === campaignId)
-      await Promise.all(toRemove.map(j => j.remove().catch(() => {})))
-    }
-  } catch {
-    // BullMQ removal is best-effort — DB update is authoritative
-  }
-
   // Mark pending contacts as cancelled
+  // (Worker checks status before sending, so queued jobs will be skipped)
   await db.execute({
     sql: `UPDATE campaign_contacts SET status = 'cancelled'
           WHERE campaign_id = ? AND status = 'pending'`,
