@@ -170,8 +170,8 @@ async function createCampanha(userId, draft) {
 
   const templateMap = Object.fromEntries(templates.map(t => [t.templateId, t]))
 
-  // 3. Insert all contacts + build jobs array
-  const jobs = []
+  // 3. Build resolved contacts list (no DB yet)
+  const resolved = []  // { phone, templateId, variables, mediaUrl, tpl }
 
   for (const slice of slices) {
     const tpl  = templateMap[slice.templateId]
@@ -180,49 +180,63 @@ async function createCampanha(userId, draft) {
 
     for (const row of slice.contacts) {
       const phone = String(row[phoneColumn] || '').replace(/\D/g, '')
-      if (!phone) continue  // skip rows with no phone
+      if (!phone) continue
 
-      // Resolve each variable template: replace {{column}} tokens with the row value
       const variables = {}
       for (const [varIdx, tplStr] of Object.entries(varTemplates)) {
-        variables[varIdx] = String(tplStr).replace(/\{\{([^}]+)\}\}/g, (match, col) => {
-          return row[col] !== undefined ? String(row[col]) : match
-        })
+        variables[varIdx] = String(tplStr).replace(/\{\{([^}]+)\}\}/g, (match, col) =>
+          row[col] !== undefined ? String(row[col]) : match
+        )
       }
 
-      const contactRes = await db.execute({
-        sql: `INSERT INTO campaign_contacts
-              (campaign_id, phone, template_id, variables, status)
-              VALUES (?,?,?,?,'pending')`,
-        args: [campaignId, phone, slice.templateId, JSON.stringify(variables)],
-      })
-      const contactId = Number(contactRes.lastInsertRowid)
-
-      jobs.push({
-        name: `disparo:${campaignId}:${contactId}`,
-        data: {
-          contactId,
-          campaignId,
-          phoneNumberId,
-          wabaId,
-          to:           phone,
-          templateId:   slice.templateId,
-          templateName: tpl.name,
-          language:     tpl.language || 'pt_BR',
-          variables,
-          mediaUrl:     mediaUrl || null,
-          structure:    tpl.structure || [],
-          speedPerSecond: Number(speed) || 1,
-        },
-        opts: {
-          attempts: 3,
-          backoff: { type: 'exponential', delay: 2000 },
-          // Rate limit: 1000ms / speed jobs per second = delay between jobs
-          delay: scheduledAtVal ? Math.max(0, new Date(scheduledAtVal) - Date.now()) : 0,
-        },
-      })
+      resolved.push({ phone, templateId: slice.templateId, variables, mediaUrl, tpl })
     }
   }
+
+  if (!resolved.length) {
+    // clean up empty campaign
+    await db.execute({ sql: 'DELETE FROM campaigns WHERE id = ?', args: [campaignId] })
+    throw new Error('Nenhum contato válido encontrado no CSV (verifique a coluna do telefone).')
+  }
+
+  // 4. Batch-insert all contacts in one transaction (avoids N round-trips)
+  const CHUNK = 500  // libsql limit per batch call
+  const contactIds = []
+
+  for (let i = 0; i < resolved.length; i += CHUNK) {
+    const chunk = resolved.slice(i, i + CHUNK)
+    const stmts = chunk.map(c => ({
+      sql:  `INSERT INTO campaign_contacts (campaign_id, phone, template_id, variables, status) VALUES (?,?,?,?,'pending')`,
+      args: [campaignId, c.phone, c.templateId, JSON.stringify(c.variables)],
+    }))
+    const results = await db.batch(stmts, 'write')
+    results.forEach(r => contactIds.push(Number(r.lastInsertRowid)))
+  }
+
+  // 5. Build jobs array using the returned IDs
+  const baseDelay = scheduledAtVal ? Math.max(0, new Date(scheduledAtVal) - Date.now()) : 0
+  const jobs = resolved.map((c, i) => ({
+    name: `disparo:${campaignId}:${contactIds[i]}`,
+    data: {
+      contactId:      contactIds[i],
+      campaignId,
+      phoneNumberId,
+      wabaId,
+      to:             c.phone,
+      templateId:     c.templateId,
+      templateName:   c.tpl.name,
+      language:       c.tpl.language || 'pt_BR',
+      variables:      c.variables,
+      mediaUrl:       c.mediaUrl || null,
+      structure:      c.tpl.structure || [],
+      speedPerSecond: Number(speed) || 1,
+    },
+    opts: {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 2000 },
+      delay: baseDelay,
+    },
+  }))
 
   // Update total_contacts with actual non-empty phones
   await db.execute({
@@ -230,7 +244,7 @@ async function createCampanha(userId, draft) {
     args: [jobs.length, campaignId],
   })
 
-  // 4. Enqueue all jobs with rate limiting
+  // 6. Enqueue all jobs with rate limiting
   const speedPerSec = Math.max(1, Math.min(80, Number(speed) || 1))
   const delayBetween = Math.floor(1000 / speedPerSec)  // ms between each job
 
@@ -241,7 +255,7 @@ async function createCampanha(userId, draft) {
 
   await disparosQueue.addBulk(jobsWithDelay)
 
-  // 5. Mark campaign as running (or scheduled)
+  // 7. Mark campaign as running (or scheduled)
   const newStatus = scheduledAtVal ? 'scheduled' : 'running'
   await db.execute({
     sql: `UPDATE campaigns SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useCampanha }        from '../../../hooks/useCampanha'
 import { useTemplates }       from '../../../hooks/useTemplates'
 import { useWabas }           from '../../../hooks/useWabas'
@@ -18,6 +19,7 @@ const STEPS = [
 
 export default function DisparosNovo() {
   const [step, setStep] = useState(1)
+  const navigate = useNavigate()
 
   const {
     draft, uploading, uploadError,
@@ -88,7 +90,8 @@ export default function DisparosNovo() {
   async function handleSubmit() {
     try {
       await submit()
-      setStep(5) // "done" screen
+      // Redirect to history so the user sees the new campaign (running or scheduled)
+      navigate('/disparos/historico')
     } catch {
       // error shown via submitError
     }
