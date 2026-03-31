@@ -11,11 +11,12 @@ app.use(cors())
 app.use(express.json())
 
 // Routes
-app.use('/api/auth', require('./src/routes/auth.routes'))
-app.use('/api/wabas', require('./src/routes/waba.routes'))
-app.use('/api/templates', require('./src/routes/template.routes'))
-app.use('/api/campanhas', require('./src/routes/campanha.routes'))
-app.use('/api/aquecimento', require('./src/routes/aquecimento.routes'))
+app.use('/api/auth',       require('./src/routes/auth.routes'))
+app.use('/api/wabas',      require('./src/routes/waba.routes'))
+app.use('/api/templates',  require('./src/routes/template.routes'))
+app.use('/api/campanhas',  require('./src/routes/campanha.routes'))
+app.use('/api/aquecimento',require('./src/routes/aquecimento.routes'))
+app.use('/api/webhook',    require('./src/routes/webhook.routes'))
 
 // Run migrations then start server
 migrate()

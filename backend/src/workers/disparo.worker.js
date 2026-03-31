@@ -93,14 +93,15 @@ async function processJob(job) {
   const payload = buildMetaPayload({ to, templateName, language, variables, mediaUrl, structure })
 
   try {
-    await metaService.sendMessage(phoneNumberId, token, payload)
+    const sendResult = await metaService.sendMessage(phoneNumberId, token, payload)
+    const wamid = sendResult?.messages?.[0]?.id || null
 
-    // Mark contact as sent
+    // Mark contact as sent, save wamid for webhook correlation
     await db.execute({
       sql: `UPDATE campaign_contacts
-            SET status = 'sent', sent_at = CURRENT_TIMESTAMP, error_message = NULL
+            SET status = 'sent', sent_at = CURRENT_TIMESTAMP, error_message = NULL, wamid = ?
             WHERE id = ?`,
-      args: [contactId],
+      args: [wamid, contactId],
     })
 
     // Increment campaign sent counter

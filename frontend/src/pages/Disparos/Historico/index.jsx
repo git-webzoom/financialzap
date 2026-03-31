@@ -39,7 +39,9 @@ const CONTACT_STATUS_COLOR = {
   pending:   '#4a5568',
   sent:      '#3b82f6',
   delivered: '#22c55e',
+  read:      '#8b5cf6',
   failed:    '#ef4444',
+  cancelled: '#6b7280',
 }
 
 function fmtDate(iso) {
@@ -191,6 +193,11 @@ export default function DisparosHistorico() {
     }
   }
 
+  async function handleRefresh() {
+    if (!selected) return
+    await load()
+  }
+
   async function handleExport() {
     if (!selected) return
     setExporting(true)
@@ -254,6 +261,8 @@ export default function DisparosHistorico() {
                 onFilter={s => { setCtxFilter(s); setCtxPage(1) }}
                 page={ctxPage}
                 onPage={setCtxPage}
+                onRefresh={handleRefresh}
+                refreshing={loading}
                 onExport={handleExport}
                 exporting={exporting}
                 onCancel={handleCancel}
@@ -337,7 +346,7 @@ function Counter({ label, value, color }) {
 
 // ─── DetailPanel ──────────────────────────────────────────────────────────────
 
-function DetailPanel({ campaign, contacts, meta, loading, filter, onFilter, page, onPage, onExport, exporting, onCancel, cancelling, onDelete, deleting, actionError, onClose }) {
+function DetailPanel({ campaign, contacts, meta, loading, filter, onFilter, page, onPage, onRefresh, refreshing, onExport, exporting, onCancel, cancelling, onDelete, deleting, actionError, onClose }) {
   const color = STATUS_COLOR[campaign.status] || '#4a5568'
   const canCancel = ['pending', 'queuing', 'scheduled', 'running'].includes(campaign.status)
   const canDelete = true  // backend auto-cancels running campaigns before deleting
@@ -347,6 +356,7 @@ function DetailPanel({ campaign, contacts, meta, loading, filter, onFilter, page
     { value: 'pending',   label: 'Pendentes' },
     { value: 'sent',      label: 'Enviados' },
     { value: 'delivered', label: 'Entregues' },
+    { value: 'read',      label: 'Lidas' },
     { value: 'failed',    label: 'Falhas' },
   ]
 
@@ -361,6 +371,9 @@ function DetailPanel({ campaign, contacts, meta, loading, filter, onFilter, page
           </span>
         </div>
         <div className="dp-header-actions">
+          <button className="ht-btn ht-btn--secondary" onClick={onRefresh} disabled={refreshing}>
+            {refreshing ? <Spinner /> : '↺'} Atualizar
+          </button>
           <button className="ht-btn ht-btn--secondary" onClick={onExport} disabled={exporting}>
             {exporting ? <Spinner /> : '↓'} Exportar CSV
           </button>
@@ -413,6 +426,7 @@ function DetailPanel({ campaign, contacts, meta, loading, filter, onFilter, page
           <StatBox label="Total"     value={campaign.total_contacts} />
           <StatBox label="Enviados"  value={campaign.sent}           color="#22c55e" />
           <StatBox label="Entregues" value={campaign.delivered}      color="#3b82f6" />
+          <StatBox label="Lidas"     value={campaign.read_count}     color="#8b5cf6" />
           <StatBox label="Falhas"    value={campaign.failed}         color="#ef4444" />
         </div>
       )}
