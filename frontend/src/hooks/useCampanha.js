@@ -40,6 +40,7 @@ const INITIAL_DRAFT = {
   csvFile: null,
   columns: [],
   preview: [],
+  csvRows: [],      // full parsed rows — sent to backend on submit
   totalRows: 0,
   phoneColumn: '',
   name: '',
@@ -70,6 +71,7 @@ export function useCampanha() {
       csvFile:     data.file,
       columns:     data.columns,
       preview:     data.preview,
+      csvRows:     data.csvRows,
       totalRows:   data.totalRows,
       phoneColumn: data.phoneColumn ?? prev.phoneColumn,
       // reset downstream state when CSV changes
@@ -117,7 +119,7 @@ export function useCampanha() {
     setUploadError('')
     try {
       const result = await campanhaService.uploadCSV(file)
-      setCSVData({ file, columns: result.columns, preview: result.preview, totalRows: result.total_rows })
+      setCSVData({ file, columns: result.columns, preview: result.preview, csvRows: result.rows, totalRows: result.total_rows })
       return result
     } catch (err) {
       const msg = err.response?.data?.error || 'Erro ao processar o CSV.'

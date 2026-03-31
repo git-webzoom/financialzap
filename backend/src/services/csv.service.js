@@ -39,6 +39,7 @@ function parseCSV(buffer) {
   return {
     columns,
     preview,
+    rows: records,          // full parsed rows — sent back to frontend for submit payload
     total_rows: records.length,
   }
 }
