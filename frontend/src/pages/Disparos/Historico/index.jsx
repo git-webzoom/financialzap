@@ -11,10 +11,11 @@ import ProgressoDisparo from '../../../components/Disparos/ProgressoDisparo'
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 // Only truly active statuses that need live polling — 'scheduled' does NOT poll
-const ACTIVE = new Set(['running', 'pending'])
+const ACTIVE = new Set(['running', 'pending', 'queuing'])
 
 const STATUS_LABEL = {
   pending:          'Pendente',
+  queuing:          'Enfileirando…',
   running:          'Em andamento',
   scheduled:        'Agendado',
   done:             'Concluído',
@@ -25,6 +26,7 @@ const STATUS_LABEL = {
 
 const STATUS_COLOR = {
   pending:          '#4a5568',
+  queuing:          '#8b5cf6',
   running:          '#3b82f6',
   scheduled:        '#f59e0b',
   done:             '#22c55e',
@@ -337,7 +339,7 @@ function Counter({ label, value, color }) {
 
 function DetailPanel({ campaign, contacts, meta, loading, filter, onFilter, page, onPage, onExport, exporting, onCancel, cancelling, onDelete, deleting, actionError, onClose }) {
   const color = STATUS_COLOR[campaign.status] || '#4a5568'
-  const canCancel = ['pending', 'scheduled', 'running'].includes(campaign.status)
+  const canCancel = ['pending', 'queuing', 'scheduled', 'running'].includes(campaign.status)
   const canDelete = true  // backend auto-cancels running campaigns before deleting
 
   const FILTERS = [

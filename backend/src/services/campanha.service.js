@@ -253,13 +253,29 @@ async function createCampanha(userId, draft) {
     opts: { ...job.opts, delay: (job.opts.delay || 0) + i * delayBetween },
   }))
 
-  await disparosQueue.addBulk(jobsWithDelay)
-
-  // 7. Mark campaign as running (or scheduled)
-  const newStatus = scheduledAtVal ? 'scheduled' : 'running'
+  // 7. Mark campaign as queuing (pre-status before jobs are enqueued)
   await db.execute({
-    sql: `UPDATE campaigns SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-    args: [newStatus, campaignId],
+    sql: `UPDATE campaigns SET status = 'queuing', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+    args: [campaignId],
+  })
+
+  // 8. Enqueue jobs in background — do NOT await so the HTTP response returns immediately.
+  //    On completion, set status to running or scheduled.
+  setImmediate(async () => {
+    try {
+      await disparosQueue.addBulk(jobsWithDelay)
+      const newStatus = scheduledAtVal ? 'scheduled' : 'running'
+      await db.execute({
+        sql: `UPDATE campaigns SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        args: [newStatus, campaignId],
+      })
+    } catch (err) {
+      console.error(`[createCampanha] addBulk failed for campaign ${campaignId}:`, err.message)
+      await db.execute({
+        sql: `UPDATE campaigns SET status = 'failed', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+        args: [campaignId],
+      }).catch(() => {})
+    }
   })
 
   return { campaign_id: campaignId, total_enqueued: jobs.length }
@@ -364,7 +380,7 @@ async function cancelCampanha(userId, campaignId) {
   })
   if (!res.rows.length) throw new Error('Campanha não encontrada.')
   const { status } = res.rows[0]
-  if (!['pending', 'scheduled', 'running'].includes(status)) {
+  if (!['pending', 'queuing', 'scheduled', 'running'].includes(status)) {
     throw new Error(`Não é possível cancelar uma campanha com status "${status}".`)
   }
 
@@ -399,7 +415,7 @@ async function deleteCampanha(userId, campaignId) {
   const { status } = res.rows[0]
 
   // Auto-cancel before deleting if still active
-  if (['pending', 'scheduled', 'running'].includes(status)) {
+  if (['pending', 'queuing', 'scheduled', 'running'].includes(status)) {
     await cancelCampanha(userId, campaignId)
   }
 

@@ -135,14 +135,28 @@ async function onCompleted(job) {
   const db = getDb()
   const { campaignId } = job.data
 
-  // Check if all contacts are settled (sent + failed = total_contacts)
   const rows = await db.execute({
-    sql: `SELECT total_contacts, sent, failed FROM campaigns WHERE id = ?`,
+    sql: `SELECT status, total_contacts, sent, failed FROM campaigns WHERE id = ?`,
     args: [campaignId],
   })
   if (!rows.rows.length) return
-  const { total_contacts, sent, failed } = rows.rows[0]
-  if (Number(sent) + Number(failed) >= Number(total_contacts)) {
+  const { status, total_contacts, sent, failed } = rows.rows[0]
+
+  // If campaign was scheduled and first job just completed, mark it as running
+  if (status === 'scheduled') {
+    await db.execute({
+      sql: `UPDATE campaigns SET status = 'running', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      args: [campaignId],
+    })
+  }
+
+  // Check if all contacts are settled (sent + failed + cancelled = total_contacts)
+  const countRes = await db.execute({
+    sql: `SELECT COUNT(*) as total FROM campaign_contacts WHERE campaign_id = ? AND status IN ('sent','failed','cancelled')`,
+    args: [campaignId],
+  })
+  const settled = Number(countRes.rows[0]?.total || 0)
+  if (settled >= Number(total_contacts)) {
     const finalStatus = Number(failed) > 0 ? 'done_with_errors' : 'done'
     await db.execute({
       sql: `UPDATE campaigns SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,

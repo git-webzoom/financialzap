@@ -10,6 +10,7 @@ const POLL_INTERVAL = 3000
 
 const STATUS_LABEL = {
   pending:          'Pendente',
+  queuing:          'Enfileirando…',
   running:          'Em andamento',
   scheduled:        'Agendado',
   done:             'Concluído',
@@ -20,6 +21,7 @@ const STATUS_LABEL = {
 
 const STATUS_COLOR = {
   pending:          '#4a5568',
+  queuing:          '#8b5cf6',
   running:          '#3b82f6',
   scheduled:        '#f59e0b',
   done:             '#22c55e',
@@ -38,7 +40,7 @@ export default function ProgressoDisparo({ campaignId, compact = false }) {
   const [error, setError]     = useState(null)
   const timerRef              = useRef(null)
 
-  const isActive = (s) => s === 'running' || s === 'pending'
+  const isActive = (s) => s === 'running' || s === 'pending' || s === 'queuing'
 
   async function poll() {
     try {
