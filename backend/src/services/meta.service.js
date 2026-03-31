@@ -9,65 +9,89 @@ const metaApi = axios.create({ baseURL: `${BASE_URL}/${API_VERSION}` })
 
 /**
  * List all WABAs accessible by an access token.
- * Uses /me?fields=granular_scopes to find WABA IDs, then fetches each WABA's name.
+ *
+ * Tries multiple strategies in order (different token types expose different endpoints):
+ *
+ * Strategy 1 — Business portfolio: /me/businesses → owned_whatsapp_business_accounts
+ *   Works for User tokens and System User tokens with business_management permission.
+ *
+ * Strategy 2 — Direct WABA list: /me/whatsapp_business_accounts
+ *   Works for tokens with whatsapp_business_management permission granted directly.
+ *
+ * Strategy 3 — Token is a WABA itself: treat /me as a WABA node.
+ *   Works when the token was issued directly from a WABA (e.g. permanent system user token
+ *   scoped to a specific WABA — /me returns the WABA object).
+ *
  * Returns: [{ waba_id, name }]
  */
 async function getWabasFromToken(accessToken) {
-  // Step 1: get the user ID this token belongs to
-  const { data: meData } = await metaApi.get('/me', {
-    params: {
-      fields: 'id,name,granular_scopes',
-      access_token: accessToken,
-    },
-  })
+  const wabaMap = {} // waba_id → name, deduplicates across strategies
 
-  // granular_scopes includes whatsapp_business_management with target_ids = waba_ids
-  const wabaIds = []
-  if (Array.isArray(meData.granular_scopes)) {
-    for (const scope of meData.granular_scopes) {
-      if (scope.scope === 'whatsapp_business_management' && Array.isArray(scope.target_ids)) {
-        wabaIds.push(...scope.target_ids)
+  // ── Strategy 1: businesses → owned WABAs ────────────────────────────────────
+  try {
+    const { data: bmData } = await metaApi.get('/me/businesses', {
+      params: {
+        fields: 'id,name,owned_whatsapp_business_accounts{id,name}',
+        access_token: accessToken,
+        limit: 100,
+      },
+    })
+    for (const bm of bmData.data || []) {
+      for (const w of bm.owned_whatsapp_business_accounts?.data || []) {
+        wabaMap[w.id] = w.name || w.id
       }
     }
+  } catch {
+    // token type doesn't support /me/businesses — continue
   }
 
-  // If granular_scopes didn't yield results, try fetching WABAs from business accounts
-  if (!wabaIds.length) {
-    // Try fetching WABAs via the token owner's business accounts
+  // ── Strategy 2: direct WABA list ────────────────────────────────────────────
+  try {
+    const { data: wabaData } = await metaApi.get('/me/whatsapp_business_accounts', {
+      params: {
+        fields: 'id,name',
+        access_token: accessToken,
+        limit: 100,
+      },
+    })
+    for (const w of wabaData.data || []) {
+      wabaMap[w.id] = w.name || w.id
+    }
+  } catch {
+    // token type doesn't support this endpoint — continue
+  }
+
+  // ── Strategy 3: token is scoped to a WABA directly ──────────────────────────
+  if (!Object.keys(wabaMap).length) {
     try {
-      const { data: bmData } = await metaApi.get('/me/businesses', {
-        params: {
-          fields: 'id,name,owned_whatsapp_business_accounts{id,name}',
-          access_token: accessToken,
-        },
+      const { data: me } = await metaApi.get('/me', {
+        params: { fields: 'id,name', access_token: accessToken },
       })
-      for (const bm of bmData.data || []) {
-        for (const waba of bm.owned_whatsapp_business_accounts?.data || []) {
-          wabaIds.push(waba.id)
+      // If /me returns an object that looks like a WABA (has an id), try it as a WABA
+      if (me.id) {
+        try {
+          const info = await getWabaInfo(me.id, accessToken)
+          // getWabaInfo succeeds only if id is a valid WABA — has currency or timezone fields
+          if (info.currency || info.timezone_id || info.name) {
+            wabaMap[me.id] = info.name || me.id
+          }
+        } catch {
+          // not a WABA node
         }
       }
     } catch {
-      // ignore — will return empty list
+      // ignore
     }
   }
 
-  // Deduplicate
-  const uniqueIds = [...new Set(wabaIds)]
+  if (!Object.keys(wabaMap).length) {
+    throw Object.assign(
+      new Error('Nenhuma WABA encontrada para este token. Verifique se o token possui as permissões whatsapp_business_management ou business_management.'),
+      { status: 422 }
+    )
+  }
 
-  // Step 2: fetch name for each WABA
-  const results = await Promise.all(
-    uniqueIds.map(async (id) => {
-      try {
-        const info = await getWabaInfo(id, accessToken)
-        return { waba_id: id, name: info.name || id }
-      } catch {
-        // If we can't fetch info, still return the id so user can connect it
-        return { waba_id: id, name: id }
-      }
-    })
-  )
-
-  return results
+  return Object.entries(wabaMap).map(([waba_id, name]) => ({ waba_id, name }))
 }
 
 // ─── WABA info ────────────────────────────────────────────────────────────────

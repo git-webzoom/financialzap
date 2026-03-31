@@ -14,7 +14,8 @@ async function lookup(req, res) {
     return res.json({ wabas })
   } catch (err) {
     const metaMsg = err.response?.data?.error?.message || err.message || 'Erro ao consultar a Meta.'
-    return res.status(err.response?.status || 500).json({ error: metaMsg })
+    const status  = err.status || err.response?.status || 500
+    return res.status(status).json({ error: metaMsg })
   }
 }
 
