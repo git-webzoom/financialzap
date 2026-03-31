@@ -80,4 +80,26 @@ function logout(_req, res) {
   return res.status(200).json({ message: 'Logged out successfully' })
 }
 
-module.exports = { register, login, logout, getMe, updateMe }
+// ─── GET /api/auth/users ──────────────────────────────────────────────────────
+
+async function listUsers(req, res) {
+  try {
+    const users = await authService.listUsers()
+    return res.json({ users })
+  } catch (err) {
+    return res.status(err.status || 500).json({ error: err.message })
+  }
+}
+
+// ─── DELETE /api/auth/users/:id ───────────────────────────────────────────────
+
+async function deleteUser(req, res) {
+  try {
+    await authService.deleteUser(req.user.sub, req.params.id)
+    return res.status(204).end()
+  } catch (err) {
+    return res.status(err.status || 500).json({ error: err.message })
+  }
+}
+
+module.exports = { register, login, logout, getMe, updateMe, listUsers, deleteUser }

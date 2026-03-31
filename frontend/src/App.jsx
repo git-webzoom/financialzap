@@ -23,9 +23,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public routes — /login serves both login (#) and cadastro (#cadastro) tabs */}
-        <Route path="/login"    element={<Login />} />
-        <Route path="/cadastro" element={<Login />} />
+        {/* Public routes */}
+        <Route path="/login" element={<Login />} />
 
         {/* Private routes */}
         <Route

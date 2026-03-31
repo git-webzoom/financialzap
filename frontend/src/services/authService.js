@@ -29,3 +29,17 @@ export async function updateMe(fields) {
   const { data } = await api.patch('/api/auth/me', fields)
   return data
 }
+
+export async function listUsers() {
+  const { data } = await api.get('/api/auth/users')
+  return data // { users: [...] }
+}
+
+export async function createUser(fields) {
+  const { data } = await api.post('/api/auth/register', fields)
+  return data // { user }
+}
+
+export async function deleteUser(id) {
+  await api.delete(`/api/auth/users/${id}`)
+}

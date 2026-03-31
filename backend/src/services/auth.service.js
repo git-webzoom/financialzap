@@ -149,10 +149,36 @@ async function updateProfile(userId, { name, email, currentPassword, newPassword
   return getProfile(userId)
 }
 
+// ─── List all users ───────────────────────────────────────────────────────────
+
+async function listUsers() {
+  const db = getDb()
+  const { rows } = await db.execute({
+    sql: 'SELECT id, name, email, created_at FROM users ORDER BY created_at DESC',
+    args: [],
+  })
+  return rows
+}
+
+// ─── Delete user ──────────────────────────────────────────────────────────────
+
+async function deleteUser(requesterId, targetId) {
+  if (Number(requesterId) === Number(targetId)) {
+    throw Object.assign(new Error('Você não pode excluir sua própria conta.'), { status: 400 })
+  }
+  const db = getDb()
+  const { rows } = await db.execute({
+    sql: 'SELECT id FROM users WHERE id = ?',
+    args: [targetId],
+  })
+  if (!rows.length) throw Object.assign(new Error('Usuário não encontrado.'), { status: 404 })
+  await db.execute({ sql: 'DELETE FROM users WHERE id = ?', args: [targetId] })
+}
+
 // ─── Verify token ─────────────────────────────────────────────────────────────
 
 function verifyToken(token) {
   return jwt.verify(token, getJwtSecret())
 }
 
-module.exports = { register, login, verifyToken, getProfile, updateProfile }
+module.exports = { register, login, verifyToken, getProfile, updateProfile, listUsers, deleteUser }
