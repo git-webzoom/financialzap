@@ -134,7 +134,13 @@ export function useCampanha() {
     setSubmitting(true)
     setSubmitError('')
     try {
-      const result = await campanhaService.createCampanha(draft)
+      // scheduledAt is stored as local datetime string (YYYY-MM-DDTHH:mm).
+      // Convert to UTC ISO string before sending to backend.
+      const payload = { ...draft }
+      if (draft.scheduleType === 'scheduled' && draft.scheduledAt) {
+        payload.scheduledAt = new Date(draft.scheduledAt).toISOString()
+      }
+      const result = await campanhaService.createCampanha(payload)
       setCampaignId(result.campaign_id)
       return result
     } catch (err) {

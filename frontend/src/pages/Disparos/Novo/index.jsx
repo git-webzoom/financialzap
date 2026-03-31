@@ -95,10 +95,13 @@ export default function DisparosNovo() {
   }
 
   // ── Now scheduling fields helpers ──────────────────────────────────────────
+  // datetime-local inputs work in LOCAL time — never use toISOString() (UTC).
+  // Pad helper for local date parts
   const nowIso = useMemo(() => {
     const d = new Date()
     d.setMinutes(d.getMinutes() + 30)
-    return d.toISOString().slice(0, 16)
+    const pad = n => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
   }, [])
 
   return (
