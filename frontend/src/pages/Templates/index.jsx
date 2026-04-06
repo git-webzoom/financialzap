@@ -3,7 +3,6 @@ import { useTemplates } from '../../hooks/useTemplates'
 import { useWabas } from '../../hooks/useWabas'
 import TemplateForm from '../../components/Templates/TemplateForm'
 import * as wabaService from '../../services/wabaService'
-import * as templateService from '../../services/templateService'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -490,7 +489,6 @@ export default function Templates() {
             onDelete={handleDelete}
             deleting={deleting}
             deleteError={deleteError}
-            onPreviewUrlSaved={() => load()}
           />
         )}
 
@@ -559,36 +557,14 @@ const STATUS_TAB_LABELS = {
 
 // ─── Template detail modal ────────────────────────────────────────────────────
 
-function TemplateModal({ template: t, onClose, onDelete, deleting, deleteError, onPreviewUrlSaved }) {
+function TemplateModal({ template: t, onClose, onDelete, deleting, deleteError }) {
   const structure = Array.isArray(t.structure) ? t.structure : []
   const header   = structure.find(c => c.type === 'HEADER')
   const body     = structure.find(c => c.type === 'BODY')
   const footer   = structure.find(c => c.type === 'FOOTER')
   const buttons  = structure.find(c => c.type === 'BUTTONS')
 
-  const isMedia = header && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(header.format)
-  const existingUrl = header?.example?.header_url?.[0] || ''
-
-  const [urlInput,    setUrlInput]    = useState(existingUrl)
-  const [urlSaving,   setUrlSaving]   = useState(false)
-  const [urlError,    setUrlError]    = useState('')
-  const [urlSaved,    setUrlSaved]    = useState(false)
-
-  async function handleSaveUrl() {
-    if (!urlInput.trim()) return
-    setUrlSaving(true)
-    setUrlError('')
-    setUrlSaved(false)
-    try {
-      await templateService.updatePreviewUrl(t.template_id, urlInput.trim())
-      setUrlSaved(true)
-      if (onPreviewUrlSaved) onPreviewUrlSaved()
-    } catch (err) {
-      setUrlError(err.response?.data?.error || err.message)
-    } finally {
-      setUrlSaving(false)
-    }
-  }
+  const mediaUrl = header?.example?.header_url?.[0] || null
 
   function handleBackdrop(e) {
     if (e.target === e.currentTarget) onClose()
@@ -622,33 +598,6 @@ function TemplateModal({ template: t, onClose, onDelete, deleting, deleteError, 
           <MetaItem label="Sincronizado" value={formatDatePT(t.last_sync_at)} />
         </div>
 
-        {/* URL de prévia para templates de mídia */}
-        {isMedia && (
-          <div className="tdm-preview-url-section">
-            <label className="tdm-preview-url-label">
-              URL de prévia ({header.format === 'IMAGE' ? 'imagem' : header.format === 'VIDEO' ? 'vídeo' : 'documento'})
-              <span className="tdm-preview-url-hint">Apenas para visualização no painel — não altera o template na Meta</span>
-            </label>
-            <div className="tdm-preview-url-row">
-              <input
-                className="tdm-preview-url-input"
-                value={urlInput}
-                onChange={e => { setUrlInput(e.target.value); setUrlSaved(false) }}
-                placeholder={header.format === 'VIDEO' ? 'https://exemplo.com/video.mp4' : 'https://exemplo.com/imagem.jpg'}
-              />
-              <button
-                className="tp-btn tp-btn--sync"
-                onClick={handleSaveUrl}
-                disabled={urlSaving || !urlInput.trim()}
-                style={{ whiteSpace: 'nowrap' }}
-              >
-                {urlSaving ? 'Salvando…' : urlSaved ? '✓ Salvo' : 'Salvar URL'}
-              </button>
-            </div>
-            {urlError && <span className="tdm-preview-url-err">⚠ {urlError}</span>}
-          </div>
-        )}
-
         {/* Preview */}
         <div className="tdm-preview-title">Prévia da mensagem</div>
         <div className="tdm-bubble-wrap">
@@ -656,18 +605,18 @@ function TemplateModal({ template: t, onClose, onDelete, deleting, deleteError, 
             {header && (
               <div className="tdm-bubble-header">
                 {header.format === 'TEXT' && <strong>{header.text}</strong>}
-                {header.format === 'IMAGE' && urlInput ? (
-                  <img src={urlInput} alt="preview" className="tdm-media-img" />
-                ) : header.format === 'IMAGE' ? (
-                  <span className="tdm-media-badge">📷 Imagem</span>
-                ) : null}
-                {header.format === 'VIDEO' && urlInput ? (
-                  <video src={urlInput} className="tdm-media-video" controls preload="metadata" />
-                ) : header.format === 'VIDEO' ? (
-                  <span className="tdm-media-badge">🎬 Vídeo</span>
-                ) : null}
+                {header.format === 'IMAGE' && mediaUrl
+                  ? <img src={mediaUrl} alt="preview" className="tdm-media-img" />
+                  : header.format === 'IMAGE'
+                  ? <span className="tdm-media-badge">📷 Imagem</span>
+                  : null}
+                {header.format === 'VIDEO' && mediaUrl
+                  ? <video src={mediaUrl} className="tdm-media-video" controls preload="metadata" />
+                  : header.format === 'VIDEO'
+                  ? <span className="tdm-media-badge">🎬 Vídeo</span>
+                  : null}
                 {header.format === 'DOCUMENT' && (
-                  <span className="tdm-media-badge">📄 Documento{urlInput ? ` — ${urlInput.split('/').pop()}` : ''}</span>
+                  <span className="tdm-media-badge">📄 Documento</span>
                 )}
               </div>
             )}
@@ -1583,47 +1532,6 @@ const CSS = `
     background: #000;
   }
 
-  .tdm-preview-url-section {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .tdm-preview-url-label {
-    font-size: 11px;
-    font-family: 'DM Sans', sans-serif;
-    color: #8a94a6;
-    font-weight: 600;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .tdm-preview-url-hint {
-    font-weight: 400;
-    color: #4a5568;
-    font-size: 10px;
-  }
-  .tdm-preview-url-row {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  }
-  .tdm-preview-url-input {
-    flex: 1;
-    background: #0f1215;
-    border: 1px solid #252c38;
-    border-radius: 7px;
-    padding: 7px 10px;
-    font-size: 12px;
-    font-family: 'DM Sans', sans-serif;
-    color: #e8edf5;
-    outline: none;
-  }
-  .tdm-preview-url-input:focus { border-color: #3b82f6; }
-  .tdm-preview-url-err {
-    font-size: 11px;
-    color: #f87171;
-    font-family: 'DM Sans', sans-serif;
-  }
   .tdm-bubble-body {
     font-size: 13px;
     color: #1f2937;

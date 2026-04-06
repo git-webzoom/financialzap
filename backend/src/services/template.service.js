@@ -262,42 +262,6 @@ async function syncAllWabas() {
   return { wabas: rows.length, templates: total }
 }
 
-// ─── Update preview URL (local only) ─────────────────────────────────────────
-
-/**
- * Saves a preview URL in the local structure of a media template (IMAGE/VIDEO/DOCUMENT).
- * Does NOT touch the Meta API — only updates local DB.
- */
-async function updatePreviewUrl(userId, templateId, previewUrl) {
-  const db = getDb()
-
-  const { rows } = await db.execute({
-    sql: `SELECT t.template_id, t.structure, w.user_id
-          FROM templates t
-          JOIN wabas w ON w.waba_id = t.waba_id
-          WHERE t.template_id = ? AND w.user_id = ?`,
-    args: [templateId, userId],
-  })
-  if (!rows.length) {
-    const err = new Error('Template não encontrado')
-    err.status = 404
-    throw err
-  }
-
-  const structure = rows[0].structure ? JSON.parse(rows[0].structure) : []
-  const updated = structure.map(comp => {
-    if (comp.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(comp.format)) {
-      return { ...comp, example: { header_url: [previewUrl] } }
-    }
-    return comp
-  })
-
-  await db.execute({
-    sql: `UPDATE templates SET structure = ? WHERE template_id = ?`,
-    args: [JSON.stringify(updated), templateId],
-  })
-}
-
 // ─── Delete template (Meta API → local DB) ───────────────────────────────────
 
 async function deleteTemplate(userId, wabaId, templateId) {
@@ -450,7 +414,6 @@ module.exports = {
   listTemplates,
   createTemplate,
   batchCreateTemplates,
-  updatePreviewUrl,
   deleteTemplate,
   syncByWaba,
   syncAllWabas,

@@ -99,22 +99,6 @@ async function sendTest(req, res) {
   }
 }
 
-// PATCH /api/templates/:templateId/preview-url
-// Body: { preview_url }  — salva a URL de prévia no structure local (não envia para Meta)
-async function updatePreviewUrl(req, res) {
-  const { templateId } = req.params
-  const { preview_url } = req.body
-  if (!preview_url || typeof preview_url !== 'string') {
-    return res.status(400).json({ error: 'preview_url é obrigatória' })
-  }
-  try {
-    await templateService.updatePreviewUrl(req.user.sub, templateId, preview_url.trim())
-    res.json({ ok: true })
-  } catch (err) {
-    res.status(err.status || 500).json({ error: err.message })
-  }
-}
-
 // DELETE /api/templates/:wabaId/:templateId
 async function remove(req, res) {
   try {
@@ -125,4 +109,4 @@ async function remove(req, res) {
   }
 }
 
-module.exports = { list, create, batchCreate, sync, sendTest, updatePreviewUrl, remove }
+module.exports = { list, create, batchCreate, sync, sendTest, remove }
