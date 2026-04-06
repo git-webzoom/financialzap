@@ -5,7 +5,7 @@
  * Active campaigns update via ProgressoDisparo (real-time polling).
  */
 import { useCallback, useEffect, useState } from 'react'
-import { listCampanhas, getCampanhaContacts, cancelCampanha, deleteCampanha } from '../../../services/campanhaService'
+import { listCampanhas, getCampanhaContacts, cancelCampanha, deleteCampanha, forceDispatch } from '../../../services/campanhaService'
 import ProgressoDisparo from '../../../components/Disparos/ProgressoDisparo'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -98,10 +98,11 @@ export default function DisparosHistorico() {
   const [ctxPage,   setCtxPage]   = useState(1)
   const [ctxLoading, setCtxLoading] = useState(false)
 
-  // Export / cancel / delete state
-  const [exporting,  setExporting]  = useState(false)
-  const [cancelling, setCancelling] = useState(false)
-  const [deleting,   setDeleting]   = useState(false)
+  // Export / cancel / delete / dispatch state
+  const [exporting,   setExporting]   = useState(false)
+  const [cancelling,  setCancelling]  = useState(false)
+  const [deleting,    setDeleting]    = useState(false)
+  const [dispatching, setDispatching] = useState(false)
   const [actionError, setActionError] = useState(null)
 
   async function load() {
@@ -196,8 +197,25 @@ export default function DisparosHistorico() {
     if (!selected) return
     const campaignId = selected.id
     await load()
-    // Reload contacts for the open panel as well
     await loadContacts({ id: campaignId }, ctxPage, ctxFilter)
+  }
+
+  async function handleForceDispatch() {
+    if (!selected) return
+    if (!window.confirm(`Disparar agora a campanha "${selected.name}"? Os contatos pendentes serão enviados imediatamente.`)) return
+    setDispatching(true)
+    setActionError(null)
+    try {
+      const result = await forceDispatch(selected.id)
+      await load()
+      await loadContacts({ id: selected.id }, ctxPage, ctxFilter)
+      // Show enqueued count briefly
+      setActionError(null)
+    } catch (err) {
+      setActionError(err.response?.data?.error || err.message)
+    } finally {
+      setDispatching(false)
+    }
   }
 
   async function handleExport() {
@@ -271,6 +289,8 @@ export default function DisparosHistorico() {
                 cancelling={cancelling}
                 onDelete={handleDelete}
                 deleting={deleting}
+                onForceDispatch={handleForceDispatch}
+                dispatching={dispatching}
                 actionError={actionError}
                 onClose={closeDetail}
               />
@@ -352,9 +372,10 @@ function Counter({ label, value, color }) {
 
 // ─── DetailPanel ──────────────────────────────────────────────────────────────
 
-function DetailPanel({ campaign, contacts, meta, loading, filter, onFilter, page, onPage, onRefresh, refreshing, onExport, exporting, onCancel, cancelling, onDelete, deleting, actionError, onClose }) {
+function DetailPanel({ campaign, contacts, meta, loading, filter, onFilter, page, onPage, onRefresh, refreshing, onExport, exporting, onCancel, cancelling, onDelete, deleting, onForceDispatch, dispatching, actionError, onClose }) {
   const color = STATUS_COLOR[campaign.status] || '#4a5568'
   const canCancel = ['pending', 'queuing', 'scheduled', 'running'].includes(campaign.status)
+  const canDispatch = ['scheduled', 'failed'].includes(campaign.status)
   const canDelete = true  // backend auto-cancels running campaigns before deleting
 
   const FILTERS = [
@@ -389,13 +410,18 @@ function DetailPanel({ campaign, contacts, meta, loading, filter, onFilter, page
 
       {/* Action buttons */}
       <div className="dp-actions">
+        {canDispatch && (
+          <button className="ht-btn ht-btn--dispatch" onClick={onForceDispatch} disabled={dispatching || cancelling || deleting}>
+            {dispatching ? <Spinner /> : '▶'} Disparar agora
+          </button>
+        )}
         {canCancel && (
-          <button className="ht-btn ht-btn--warn" onClick={onCancel} disabled={cancelling || deleting}>
+          <button className="ht-btn ht-btn--warn" onClick={onCancel} disabled={cancelling || deleting || dispatching}>
             {cancelling ? <Spinner /> : '⏹'} Cancelar disparo
           </button>
         )}
         {canDelete && (
-          <button className="ht-btn ht-btn--danger" onClick={onDelete} disabled={deleting || cancelling}>
+          <button className="ht-btn ht-btn--danger" onClick={onDelete} disabled={deleting || cancelling || dispatching}>
             {deleting ? <Spinner /> : '🗑'} Apagar campanha
           </button>
         )}
@@ -539,6 +565,8 @@ const CSS = `
   .ht-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .ht-btn--secondary { background: #1a1f28; border-color: #252c38; color: #8a94a6; }
   .ht-btn--secondary:hover:not(:disabled) { background: #252c38; color: #e8edf5; }
+  .ht-btn--dispatch { background: #22c55e18; border-color: #22c55e40; color: #22c55e; }
+  .ht-btn--dispatch:hover:not(:disabled) { background: #22c55e25; }
   .ht-btn--warn   { background: #f59e0b18; border-color: #f59e0b40; color: #f59e0b; }
   .ht-btn--warn:hover:not(:disabled)   { background: #f59e0b25; }
   .ht-btn--danger { background: #ef444418; border-color: #ef444440; color: #f87171; }

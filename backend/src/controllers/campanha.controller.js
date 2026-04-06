@@ -1,5 +1,5 @@
 const { parseCSV } = require('../services/csv.service')
-const { createCampanha, getCampanhaStatus, listCampanhas, getCampanhaContacts, cancelCampanha, deleteCampanha } = require('../services/campanha.service')
+const { createCampanha, getCampanhaStatus, listCampanhas, getCampanhaContacts, cancelCampanha, deleteCampanha, enqueueJobs, dispatchScheduledCampaigns } = require('../services/campanha.service')
 
 /**
  * POST /api/campanhas/upload-csv
@@ -100,6 +100,42 @@ async function deleteCampanhaHandler(req, res) {
   }
 }
 
+/**
+ * POST /api/campanhas/:id/dispatch
+ * Force-dispatches a campaign that is stuck in 'scheduled' status.
+ * Also works to re-dispatch a campaign that failed to enqueue.
+ */
+async function forceDispatchHandler(req, res) {
+  try {
+    const db = require('../db/database').getDb()
+    const campaignId = Number(req.params.id)
+
+    // Verify ownership and check status
+    const { rows } = await db.execute({
+      sql: 'SELECT id, status, name FROM campaigns WHERE id = ? AND user_id = ?',
+      args: [campaignId, req.user.sub],
+    })
+    if (!rows.length) return res.status(404).json({ error: 'Campanha não encontrada.' })
+
+    const { status, name } = rows[0]
+    if (!['scheduled', 'running', 'pending', 'failed'].includes(status)) {
+      return res.status(422).json({ error: `Campanha "${name}" está em status "${status}" — não pode ser disparada novamente.` })
+    }
+
+    // Mark as running
+    await db.execute({
+      sql: `UPDATE campaigns SET status = 'running', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      args: [campaignId],
+    })
+
+    // Enqueue pending contacts
+    const count = await enqueueJobs(campaignId)
+    return res.json({ ok: true, enqueued: count })
+  } catch (err) {
+    return res.status(500).json({ error: err.message })
+  }
+}
+
 module.exports = {
   uploadCSV,
   createCampanhaHandler,
@@ -108,4 +144,5 @@ module.exports = {
   getCampanhaContactsHandler,
   cancelCampanhaHandler,
   deleteCampanhaHandler,
+  forceDispatchHandler,
 }

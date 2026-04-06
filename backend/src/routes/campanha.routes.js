@@ -12,6 +12,7 @@ router.get('/',                 authMiddleware, ctrl.listCampanhasHandler)
 router.get('/:id/status',       authMiddleware, ctrl.getCampanhaStatusHandler)
 router.get('/:id/contacts',     authMiddleware, ctrl.getCampanhaContactsHandler)
 router.patch('/:id/cancel',     authMiddleware, ctrl.cancelCampanhaHandler)
+router.post('/:id/dispatch',    authMiddleware, ctrl.forceDispatchHandler)
 router.delete('/:id',           authMiddleware, ctrl.deleteCampanhaHandler)
 
 module.exports = router

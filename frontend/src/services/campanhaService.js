@@ -63,3 +63,9 @@ export async function cancelCampanha(campaignId) {
 export async function deleteCampanha(campaignId) {
   await api.delete(`/api/campanhas/${campaignId}`)
 }
+
+/** POST /api/campanhas/:id/dispatch — force-dispatches a stuck scheduled/failed campaign */
+export async function forceDispatch(campaignId) {
+  const { data } = await api.post(`/api/campanhas/${campaignId}/dispatch`)
+  return data
+}
