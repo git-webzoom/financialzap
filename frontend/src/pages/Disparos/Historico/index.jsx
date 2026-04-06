@@ -194,7 +194,10 @@ export default function DisparosHistorico() {
 
   async function handleRefresh() {
     if (!selected) return
+    const campaignId = selected.id
     await load()
+    // Reload contacts for the open panel as well
+    await loadContacts({ id: campaignId }, ctxPage, ctxFilter)
   }
 
   async function handleExport() {
