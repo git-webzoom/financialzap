@@ -268,6 +268,16 @@ async function syncTemplates(wabaId, accessToken) {
     }
   }
 
+  // Remove templates que não existem mais na Meta
+  if (templates.length > 0) {
+    const activeIds = templates.map(t => t.id)
+    const placeholders = activeIds.map(() => '?').join(',')
+    await db.execute({
+      sql: `DELETE FROM templates WHERE waba_id = ? AND template_id NOT IN (${placeholders})`,
+      args: [wabaId, ...activeIds],
+    })
+  }
+
   return synced
 }
 
