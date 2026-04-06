@@ -52,9 +52,12 @@ function buildComponents({ headerType, headerText, headerMediaUrl, bodyText, var
   if (headerType === 'TEXT' && headerText.trim()) {
     components.push({ type: 'HEADER', format: 'TEXT', text: headerText.trim() })
   } else if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerType)) {
+    // Meta aceita example.header_url apenas para IMAGE com URL pública acessível.
+    // Para VIDEO e DOCUMENT, o example deve usar header_handle (media upload),
+    // então omitimos o example — a mídia é enviada no momento do disparo via link.
     const comp = { type: 'HEADER', format: headerType }
-    if (headerMediaUrl.trim()) {
-      comp.example = { header_handle: [headerMediaUrl.trim()] }
+    if (headerType === 'IMAGE' && headerMediaUrl.trim()) {
+      comp.example = { header_url: [headerMediaUrl.trim()] }
     }
     components.push(comp)
   }
