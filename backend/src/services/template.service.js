@@ -282,7 +282,8 @@ async function deleteTemplate(userId, wabaId, templateId) {
     console.error('[deleteTemplate] Meta error:', JSON.stringify(metaErr || err.message))
     // If Meta says it doesn't exist, proceed to delete locally anyway
     const metaMsg = metaErr?.message || ''
-    if (!metaMsg.includes('does not exist') && !metaMsg.includes('not found')) {
+    const notFound = metaMsg.includes('does not exist') || metaMsg.includes('not found') || metaMsg.includes("wasn't found")
+    if (!notFound) {
       throw new Error(`Meta API error: ${metaErr?.error_user_msg || metaMsg || err.message}`)
     }
   }
