@@ -94,6 +94,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
   total_contacts   INTEGER DEFAULT 0,
   sent             INTEGER DEFAULT 0,
   delivered        INTEGER DEFAULT 0,
+  read_count       INTEGER DEFAULT 0,
   failed           INTEGER DEFAULT 0,
   created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -114,14 +115,18 @@ CREATE TABLE IF NOT EXISTS campaign_contacts (
   phone         TEXT    NOT NULL,
   template_id   TEXT    NOT NULL,
   variables     TEXT,           -- JSON serializado: {"1": "João", "2": "123"}
-  status        TEXT    DEFAULT 'pending',  -- pending | sent | delivered | failed
+  status        TEXT    DEFAULT 'pending',  -- pending | sent | delivered | read | failed | cancelled
   error_message TEXT,
   sent_at       DATETIME,
+  wamid         TEXT,
+  delivered_at  DATETIME,
+  read_at       DATETIME,
   FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_campaign_contacts_campaign_id ON campaign_contacts(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_contacts_status      ON campaign_contacts(status);
+CREATE INDEX IF NOT EXISTS idx_campaign_contacts_wamid       ON campaign_contacts(wamid);
 
 -- ─── warming_plans ────────────────────────────────────────────────────────────
 -- Planos de aquecimento por número.

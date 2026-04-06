@@ -10,8 +10,7 @@ import ProgressoDisparo from '../../../components/Disparos/ProgressoDisparo'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-// Only truly active statuses that need live polling — 'scheduled' does NOT poll
-const ACTIVE = new Set(['running', 'pending', 'queuing'])
+const ACTIVE = new Set(['running', 'pending', 'queuing', 'scheduled'])
 
 const STATUS_LABEL = {
   pending:          'Pendente',
@@ -285,9 +284,11 @@ export default function DisparosHistorico() {
 
 function CampaignRow({ campaign: c, onOpen }) {
   const color = STATUS_COLOR[c.status] || '#4a5568'
-  const total = Number(c.total_contacts) || 0
-  const sent  = Number(c.sent) || 0
-  const fail  = Number(c.failed) || 0
+  const total     = Number(c.total_contacts) || 0
+  const sent      = Number(c.sent)       || 0
+  const delivered = Number(c.delivered)  || 0
+  const read      = Number(c.read_count) || 0
+  const fail      = Number(c.failed)     || 0
 
   return (
     <div className="ht-row" onClick={onOpen}>
@@ -313,9 +314,11 @@ function CampaignRow({ campaign: c, onOpen }) {
           {STATUS_LABEL[c.status] || c.status}
         </span>
         <div className="ht-counters">
-          <Counter label="Total"    value={total} />
-          <Counter label="Enviados" value={sent}  color="#22c55e" />
-          <Counter label="Falhas"   value={fail}  color="#ef4444" />
+          <Counter label="Total"     value={total}     />
+          <Counter label="Enviados"  value={sent}      color="#22c55e" />
+          <Counter label="Entregues" value={delivered} color="#3b82f6" />
+          <Counter label="Lidas"     value={read}      color="#8b5cf6" />
+          <Counter label="Falhas"    value={fail}      color="#ef4444" />
         </div>
         <span className="ht-chevron">›</span>
       </div>
@@ -400,21 +403,13 @@ function DetailPanel({ campaign, contacts, meta, loading, filter, onFilter, page
         <div className="ht-banner ht-banner--err">⚠ {actionError}</div>
       )}
 
-      {/* Live progress for running/pending campaigns */}
+      {/* Live progress for active campaigns (inclui scheduled) */}
       {ACTIVE.has(campaign.status) && (
         <div style={{ padding: '0 0 4px' }}>
           <ProgressoDisparo campaignId={campaign.id} />
-        </div>
-      )}
-
-      {/* Scheduled campaign info */}
-      {campaign.status === 'scheduled' && (
-        <div className="dp-stats">
-          <StatBox label="Total contatos" value={campaign.total_contacts} />
-          {campaign.scheduled_at && (
-            <div className="dp-stat">
-              <span className="dp-stat-val" style={{ color: '#f59e0b', fontSize: 14 }}>{fmtDate(campaign.scheduled_at)}</span>
-              <span className="dp-stat-lbl">Agendado para</span>
+          {campaign.status === 'scheduled' && campaign.scheduled_at && (
+            <div style={{ marginTop: 8, fontSize: 12, color: '#f59e0b', fontFamily: "'DM Sans', sans-serif" }}>
+              Agendado para {fmtDate(campaign.scheduled_at)}
             </div>
           )}
         </div>

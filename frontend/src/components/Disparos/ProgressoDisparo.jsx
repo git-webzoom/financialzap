@@ -40,7 +40,7 @@ export default function ProgressoDisparo({ campaignId, compact = false }) {
   const [error, setError]     = useState(null)
   const timerRef              = useRef(null)
 
-  const isActive = (s) => s === 'running' || s === 'pending' || s === 'queuing'
+  const isActive = (s) => ['running', 'pending', 'queuing', 'scheduled'].includes(s)
 
   async function poll() {
     try {
@@ -65,9 +65,10 @@ export default function ProgressoDisparo({ campaignId, compact = false }) {
   if (!data)  return <span style={{ fontSize: 12, color: '#4a5568' }}>Carregando…</span>
 
   const total     = Number(data.total_contacts) || 1
-  const sent      = Number(data.sent)      || 0
-  const failed    = Number(data.failed)    || 0
-  const delivered = Number(data.delivered) || 0
+  const sent      = Number(data.sent)        || 0
+  const failed    = Number(data.failed)      || 0
+  const delivered = Number(data.delivered)   || 0
+  const read      = Number(data.read_count)  || 0
   const settled   = sent + failed
   const pct       = Math.min(100, Math.round((settled / total) * 100))
 
@@ -100,6 +101,7 @@ export default function ProgressoDisparo({ campaignId, compact = false }) {
             <Stat label="Total"      value={total}     />
             <Stat label="Enviados"   value={sent}      color="#22c55e" />
             <Stat label="Entregues"  value={delivered} color="#3b82f6" />
+            <Stat label="Lidas"      value={read}      color="#8b5cf6" />
             <Stat label="Falhas"     value={failed}    color="#ef4444" />
           </div>
         )}

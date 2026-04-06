@@ -338,7 +338,7 @@ async function getCampanhaContacts(userId, campaignId, opts = {}) {
 async function getCampanhaStatus(userId, campaignId) {
   const db = getDb()
   const rows = await db.execute({
-    sql: `SELECT id, name, status, total_contacts, sent, delivered, failed,
+    sql: `SELECT id, name, status, total_contacts, sent, delivered, read_count, failed,
                  speed_per_second, scheduled_at, created_at, updated_at
           FROM campaigns
           WHERE id = ? AND user_id = ?`,
@@ -354,7 +354,7 @@ async function getCampanhaStatus(userId, campaignId) {
 async function listCampanhas(userId) {
   const db = getDb()
   const rows = await db.execute({
-    sql: `SELECT id, name, status, total_contacts, sent, delivered, failed,
+    sql: `SELECT id, name, status, total_contacts, sent, delivered, read_count, failed,
                  speed_per_second, scheduled_at, created_at, updated_at
           FROM campaigns
           WHERE user_id = ?
