@@ -49,6 +49,7 @@ export default function SelecionarTemplates({
         templateId: tpl.template_id,
         wabaId:     tpl.waba_id,
         name:       tpl.name,
+        language:   tpl.language,
         structure:  tpl.structure,
       }]
     }

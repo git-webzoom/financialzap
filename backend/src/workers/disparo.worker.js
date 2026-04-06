@@ -92,6 +92,9 @@ async function processJob(job) {
 
   const payload = buildMetaPayload({ to, templateName, language, variables, mediaUrl, structure })
 
+  console.log('[worker] Sending payload:', JSON.stringify(payload))
+  console.log('[worker] phoneNumberId:', phoneNumberId, 'wabaId:', wabaId, 'to:', to)
+
   try {
     const sendResult = await metaService.sendMessage(phoneNumberId, token, payload)
     const wamid = sendResult?.messages?.[0]?.id || null
@@ -110,6 +113,8 @@ async function processJob(job) {
       args: [campaignId],
     })
   } catch (err) {
+    console.error('[worker] Meta API error full response:', JSON.stringify(err.response?.data))
+    console.error('[worker] Job data on error:', JSON.stringify({ contactId, campaignId, phoneNumberId, wabaId, to, templateName: job.data.templateName, language: job.data.language, attemptsMade: job.attemptsMade }))
     const errMsg = err.response?.data?.error?.message || err.message || 'Unknown error'
     const isFinal = job.attemptsMade >= MAX_RETRIES - 1
 
