@@ -273,9 +273,9 @@ async function deleteTemplate(userId, wabaId, templateId) {
   const { name, access_token_enc } = rows[0]
   const token = wabaService.getDecryptedToken({ access_token_enc })
 
-  // Delete on Meta (by name — Meta's requirement)
+  // Delete on Meta (name + hsm_id required since Graph API v14+)
   try {
-    await metaService.deleteTemplate(wabaId, token, name)
+    await metaService.deleteTemplate(wabaId, token, name, templateId)
   } catch (err) {
     // If Meta says it doesn't exist, proceed to delete locally anyway
     const metaMsg = err.response?.data?.error?.message || ''

@@ -225,12 +225,12 @@ async function createTemplate(wabaId, accessToken, payload) {
 }
 
 /**
- * Delete a message template by name (Meta requires name, not ID).
+ * Delete a message template by name + hsm_id (required since Graph API v14+).
  */
-async function deleteTemplate(wabaId, accessToken, templateName) {
-  const { data } = await metaApi.delete(`/${wabaId}/message_templates`, {
-    params: { access_token: accessToken, name: templateName },
-  })
+async function deleteTemplate(wabaId, accessToken, templateName, templateId) {
+  const params = { access_token: accessToken, name: templateName }
+  if (templateId) params.hsm_id = templateId
+  const { data } = await metaApi.delete(`/${wabaId}/message_templates`, { params })
   return data
 }
 
