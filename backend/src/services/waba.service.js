@@ -226,12 +226,33 @@ async function syncTemplates(wabaId, accessToken) {
   const db = getDb()
   const now = new Date().toISOString()
 
+  // Busca estruturas já salvas localmente (para preservar example/URL que a Meta não devolve)
+  const { rows: existing } = await db.execute({
+    sql: `SELECT template_id, structure FROM templates WHERE waba_id = ?`,
+    args: [wabaId],
+  })
+  const existingMap = {}
+  for (const row of existing) {
+    existingMap[row.template_id] = row.structure ? JSON.parse(row.structure) : []
+  }
+
   let synced = 0
   for (const t of templates) {
     try {
-      // quality_score returns: { score: 'GREEN'|'YELLOW'|'RED'|'UNKNOWN', date, reasons[] }
       const qualityScore   = t.quality_score?.score ?? null
       const rejectedReason = t.rejected_reason      ?? null
+
+      // Mescla: pega os components da Meta mas preserva o example local (URL do header)
+      const localComponents = existingMap[t.id] || []
+      const mergedComponents = (t.components ?? []).map(metaComp => {
+        if (metaComp.type !== 'HEADER') return metaComp
+        const localHeader = localComponents.find(c => c.type === 'HEADER')
+        // Se já temos URL local salva, preserva
+        if (localHeader?.example?.header_url) {
+          return { ...metaComp, example: localHeader.example }
+        }
+        return metaComp
+      })
 
       await db.execute({
         sql: `
@@ -256,7 +277,7 @@ async function syncTemplates(wabaId, accessToken) {
           t.status   ?? null,
           t.category ?? null,
           t.language ?? null,
-          JSON.stringify(t.components ?? []),
+          JSON.stringify(mergedComponents),
           qualityScore,
           rejectedReason,
           now,

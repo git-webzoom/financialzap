@@ -17,6 +17,9 @@ router.post('/batch', ctrl.batchCreate)
 // Manually sync all templates for a WABA from Meta API
 router.post('/sync/:wabaId', ctrl.sync)
 
+// Update preview URL for a media template (IMAGE/VIDEO/DOCUMENT)
+router.patch('/:templateId/preview-url', ctrl.updatePreviewUrl)
+
 // Send a test message using a template
 router.post('/:templateId/test', ctrl.sendTest)
 

@@ -68,14 +68,25 @@ async function createTemplate(userId, wabaId, payload) {
 
   const token = wabaService.getDecryptedToken(rows[0])
 
+  // Para a Meta: remove example de VIDEO/DOCUMENT (ela não aceita header_url nesses formatos)
+  // Para o banco: mantém o example com a URL para exibição no card
+  const metaComponents = (payload.components || []).map(c => {
+    if (c.type === 'HEADER' && ['VIDEO', 'DOCUMENT'].includes(c.format) && c.example) {
+      const { example, ...rest } = c
+      return rest
+    }
+    return c
+  })
+  const metaPayload = { ...payload, components: metaComponents }
+
   // Call Meta API
   let metaResult
   try {
-    metaResult = await metaService.createTemplate(wabaId, token, payload)
+    metaResult = await metaService.createTemplate(wabaId, token, metaPayload)
   } catch (err) {
     const metaErr = err.response?.data?.error
     console.error('[createTemplate] Meta error:', JSON.stringify(metaErr || err.message))
-    console.error('[createTemplate] Payload sent:', JSON.stringify(payload))
+    console.error('[createTemplate] Payload sent:', JSON.stringify(metaPayload))
     const metaError = metaErr?.error_user_msg || metaErr?.message || err.message
     throw new Error(`Meta API error: ${metaError}`)
   }
@@ -251,6 +262,42 @@ async function syncAllWabas() {
   return { wabas: rows.length, templates: total }
 }
 
+// ─── Update preview URL (local only) ─────────────────────────────────────────
+
+/**
+ * Saves a preview URL in the local structure of a media template (IMAGE/VIDEO/DOCUMENT).
+ * Does NOT touch the Meta API — only updates local DB.
+ */
+async function updatePreviewUrl(userId, templateId, previewUrl) {
+  const db = getDb()
+
+  const { rows } = await db.execute({
+    sql: `SELECT t.template_id, t.structure, w.user_id
+          FROM templates t
+          JOIN wabas w ON w.waba_id = t.waba_id
+          WHERE t.template_id = ? AND w.user_id = ?`,
+    args: [templateId, userId],
+  })
+  if (!rows.length) {
+    const err = new Error('Template não encontrado')
+    err.status = 404
+    throw err
+  }
+
+  const structure = rows[0].structure ? JSON.parse(rows[0].structure) : []
+  const updated = structure.map(comp => {
+    if (comp.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(comp.format)) {
+      return { ...comp, example: { header_url: [previewUrl] } }
+    }
+    return comp
+  })
+
+  await db.execute({
+    sql: `UPDATE templates SET structure = ? WHERE template_id = ?`,
+    args: [JSON.stringify(updated), templateId],
+  })
+}
+
 // ─── Delete template (Meta API → local DB) ───────────────────────────────────
 
 async function deleteTemplate(userId, wabaId, templateId) {
@@ -403,6 +450,7 @@ module.exports = {
   listTemplates,
   createTemplate,
   batchCreateTemplates,
+  updatePreviewUrl,
   deleteTemplate,
   syncByWaba,
   syncAllWabas,

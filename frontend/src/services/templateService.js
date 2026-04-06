@@ -32,6 +32,12 @@ export async function deleteTemplate(wabaId, templateId) {
   return data // { ok }
 }
 
+// PATCH /api/templates/:templateId/preview-url — salva URL de prévia localmente (não envia à Meta)
+export async function updatePreviewUrl(templateId, previewUrl) {
+  const { data } = await api.patch(`/api/templates/${templateId}/preview-url`, { preview_url: previewUrl })
+  return data
+}
+
 // POST /api/templates/:templateId/test — send a test message via Meta Cloud API
 // payload: { phone_number_id, to, variables?, media_url? }
 export async function sendTestMessage(templateId, payload) {
