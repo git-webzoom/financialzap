@@ -35,24 +35,31 @@ const STATUS_COLOR = {
  * @param {number} props.campaignId
  * @param {boolean} [props.compact=false]  — compact inline variant (no labels row)
  */
-export default function ProgressoDisparo({ campaignId, compact = false }) {
+export default function ProgressoDisparo({ campaignId, compact = false, onStatusChange }) {
   const [data, setData]       = useState(null)
   const [error, setError]     = useState(null)
   const timerRef              = useRef(null)
+  const prevStatusRef         = useRef(null)
 
-  const isActive = (s) => ['running', 'pending', 'queuing', 'scheduled'].includes(s)
+  const isActive    = (s) => ['running', 'pending', 'queuing', 'scheduled'].includes(s)
+  const isPulsating = (s) => ['running', 'pending', 'queuing'].includes(s)
 
   async function poll() {
     try {
       const res = await getCampanhaStatus(campaignId)
       setData(res)
+
+      // Notifica o pai quando o status muda (ex: scheduled → done_with_errors)
+      if (prevStatusRef.current !== null && prevStatusRef.current !== res.status) {
+        if (onStatusChange) onStatusChange(res.status)
+      }
+      prevStatusRef.current = res.status
+
       if (isActive(res.status)) {
         timerRef.current = setTimeout(poll, POLL_INTERVAL)
       }
-      // 'scheduled', 'done', 'done_with_errors', 'failed', 'cancelled' → para o polling
     } catch (err) {
       setError(err.response?.data?.error || err.message)
-      // não reagenda em caso de erro
     }
   }
 
@@ -81,7 +88,7 @@ export default function ProgressoDisparo({ campaignId, compact = false }) {
         {/* Status badge + percent */}
         <div className="pd-header">
           <span className="pd-badge" style={{ background: color + '20', color }}>
-            {isActive(data.status) && <span className="pd-dot" style={{ background: color }} />}
+            {isPulsating(data.status) && <span className="pd-dot" style={{ background: color }} />}
             {STATUS_LABEL[data.status] || data.status}
           </span>
           <span className="pd-pct">{pct}%</span>

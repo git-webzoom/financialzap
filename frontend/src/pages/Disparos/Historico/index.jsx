@@ -403,10 +403,13 @@ function DetailPanel({ campaign, contacts, meta, loading, filter, onFilter, page
         <div className="ht-banner ht-banner--err">⚠ {actionError}</div>
       )}
 
-      {/* Live progress for active campaigns (inclui scheduled) */}
+      {/* Live progress for active campaigns */}
       {ACTIVE.has(campaign.status) && (
         <div style={{ padding: '0 0 4px' }}>
-          <ProgressoDisparo campaignId={campaign.id} />
+          <ProgressoDisparo
+            campaignId={campaign.id}
+            onStatusChange={onRefresh}
+          />
           {campaign.status === 'scheduled' && campaign.scheduled_at && (
             <div style={{ marginTop: 8, fontSize: 12, color: '#f59e0b', fontFamily: "'DM Sans', sans-serif" }}>
               Agendado para {fmtDate(campaign.scheduled_at)}
@@ -415,8 +418,8 @@ function DetailPanel({ campaign, contacts, meta, loading, filter, onFilter, page
         </div>
       )}
 
-      {/* Static stats for finished/cancelled campaigns */}
-      {!ACTIVE.has(campaign.status) && campaign.status !== 'scheduled' && (
+      {/* Static stats for finished/cancelled/failed campaigns */}
+      {!ACTIVE.has(campaign.status) && (
         <div className="dp-stats">
           <StatBox label="Total"     value={campaign.total_contacts} />
           <StatBox label="Enviados"  value={campaign.sent}           color="#22c55e" />

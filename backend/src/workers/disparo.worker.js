@@ -132,18 +132,18 @@ async function processJob(job) {
   }
 }
 
-async function onCompleted(job) {
-  const db = getDb()
-  const { campaignId } = job.data
-
+async function checkAndFinalizeCampaign(db, campaignId) {
   const rows = await db.execute({
-    sql: `SELECT status, total_contacts, sent, failed FROM campaigns WHERE id = ?`,
+    sql: `SELECT status, total_contacts, failed FROM campaigns WHERE id = ?`,
     args: [campaignId],
   })
   if (!rows.rows.length) return
-  const { status, total_contacts, sent, failed } = rows.rows[0]
+  const { status, total_contacts, failed } = rows.rows[0]
 
-  // If campaign was scheduled and first job just completed, mark it as running
+  // Se já está num estado final, não mexe
+  if (['done', 'done_with_errors', 'cancelled', 'failed'].includes(status)) return
+
+  // Se estava agendado e algum job executou, muda para running
   if (status === 'scheduled') {
     await db.execute({
       sql: `UPDATE campaigns SET status = 'running', updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
@@ -151,12 +151,13 @@ async function onCompleted(job) {
     })
   }
 
-  // Check if all contacts are settled (sent + failed + cancelled = total_contacts)
+  // Conta quantos contatos já foram resolvidos (sent + failed + cancelled)
   const countRes = await db.execute({
     sql: `SELECT COUNT(*) as total FROM campaign_contacts WHERE campaign_id = ? AND status IN ('sent','failed','cancelled')`,
     args: [campaignId],
   })
   const settled = Number(countRes.rows[0]?.total || 0)
+
   if (settled >= Number(total_contacts)) {
     const finalStatus = Number(failed) > 0 ? 'done_with_errors' : 'done'
     await db.execute({
@@ -166,8 +167,19 @@ async function onCompleted(job) {
   }
 }
 
+async function onCompleted(job) {
+  const db = getDb()
+  await checkAndFinalizeCampaign(db, job.data.campaignId)
+}
+
 async function onFailed(job, err) {
   console.error(`[worker] Job ${job.id} failed (attempt ${job.attemptsMade}/${MAX_RETRIES}): ${err.message}`)
+
+  // Só age na tentativa final (BullMQ chama onFailed em cada tentativa)
+  if (job.attemptsMade < MAX_RETRIES) return
+
+  const db = getDb()
+  await checkAndFinalizeCampaign(db, job.data.campaignId)
 }
 
 let workerInstance = null
