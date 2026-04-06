@@ -118,7 +118,7 @@ async function forceDispatchHandler(req, res) {
     if (!rows.length) return res.status(404).json({ error: 'Campanha não encontrada.' })
 
     const { status, name } = rows[0]
-    if (!['scheduled', 'running', 'pending', 'failed'].includes(status)) {
+    if (!['scheduled', 'queuing', 'running', 'pending', 'failed'].includes(status)) {
       return res.status(422).json({ error: `Campanha "${name}" está em status "${status}" — não pode ser disparada novamente.` })
     }
 

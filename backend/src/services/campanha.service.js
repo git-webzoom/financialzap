@@ -212,19 +212,19 @@ async function createCampanha(userId, draft) {
     throw new Error('Nenhum contato válido encontrado no CSV (verifique a coluna do telefone).')
   }
 
-  // 4. Batch-insert contacts
-  const CHUNK = 500
-  const contactIds = []
-
+  // 4. Insert contacts in chunks using multi-value INSERT (fast, no batch limit issues)
+  const CHUNK = 100
   for (let i = 0; i < resolved.length; i += CHUNK) {
     const chunk = resolved.slice(i, i + CHUNK)
-    // Store mediaUrl per contact so enqueueJobs can recover it
-    const stmts = chunk.map(c => ({
-      sql:  `INSERT INTO campaign_contacts (campaign_id, phone, template_id, variables, media_url, status) VALUES (?,?,?,?,?,'pending')`,
-      args: [campaignId, c.phone, c.templateId, JSON.stringify(c.variables), c.mediaUrl || null],
-    }))
-    const results = await db.batch(stmts, 'write')
-    results.forEach(r => contactIds.push(Number(r.lastInsertRowid)))
+    const placeholders = chunk.map(() => '(?,?,?,?,?,\'pending\')').join(',')
+    const args = []
+    for (const c of chunk) {
+      args.push(campaignId, c.phone, c.templateId, JSON.stringify(c.variables), c.mediaUrl || null)
+    }
+    await db.execute({
+      sql: `INSERT INTO campaign_contacts (campaign_id, phone, template_id, variables, media_url, status) VALUES ${placeholders}`,
+      args,
+    })
   }
 
   // Update total_contacts with actual count
@@ -273,9 +273,11 @@ async function createCampanha(userId, draft) {
 async function dispatchScheduledCampaigns() {
   const db = getDb()
 
+  // Pick up: scheduled campaigns whose time has come + queuing campaigns stuck > 2 min
   const { rows } = await db.execute({
-    sql: `SELECT id, name, scheduled_at FROM campaigns
-          WHERE status = 'scheduled' AND scheduled_at <= CURRENT_TIMESTAMP`,
+    sql: `SELECT id, name, scheduled_at, status FROM campaigns
+          WHERE (status = 'scheduled' AND scheduled_at <= CURRENT_TIMESTAMP)
+             OR (status = 'queuing' AND updated_at <= datetime('now', '-2 minutes'))`,
     args: [],
   })
 

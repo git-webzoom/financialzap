@@ -375,7 +375,7 @@ function Counter({ label, value, color }) {
 function DetailPanel({ campaign, contacts, meta, loading, filter, onFilter, page, onPage, onRefresh, refreshing, onExport, exporting, onCancel, cancelling, onDelete, deleting, onForceDispatch, dispatching, actionError, onClose }) {
   const color = STATUS_COLOR[campaign.status] || '#4a5568'
   const canCancel = ['pending', 'queuing', 'scheduled', 'running'].includes(campaign.status)
-  const canDispatch = ['scheduled', 'failed'].includes(campaign.status)
+  const canDispatch = ['scheduled', 'queuing', 'pending', 'failed'].includes(campaign.status)
   const canDelete = true  // backend auto-cancels running campaigns before deleting
 
   const FILTERS = [
