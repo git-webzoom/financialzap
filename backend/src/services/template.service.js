@@ -275,12 +275,15 @@ async function deleteTemplate(userId, wabaId, templateId) {
 
   // Delete on Meta (name + hsm_id required since Graph API v14+)
   try {
+    console.log('[deleteTemplate] Calling Meta — wabaId:', wabaId, 'name:', name, 'hsm_id:', templateId)
     await metaService.deleteTemplate(wabaId, token, name, templateId)
   } catch (err) {
+    const metaErr = err.response?.data?.error
+    console.error('[deleteTemplate] Meta error:', JSON.stringify(metaErr || err.message))
     // If Meta says it doesn't exist, proceed to delete locally anyway
-    const metaMsg = err.response?.data?.error?.message || ''
+    const metaMsg = metaErr?.message || ''
     if (!metaMsg.includes('does not exist') && !metaMsg.includes('not found')) {
-      throw new Error(`Meta API error: ${metaMsg || err.message}`)
+      throw new Error(`Meta API error: ${metaErr?.error_user_msg || metaMsg || err.message}`)
     }
   }
 
