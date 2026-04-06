@@ -115,6 +115,7 @@ CREATE TABLE IF NOT EXISTS campaign_contacts (
   phone         TEXT    NOT NULL,
   template_id   TEXT    NOT NULL,
   variables     TEXT,           -- JSON serializado: {"1": "João", "2": "123"}
+  media_url     TEXT,           -- URL de mídia do header (IMAGE/VIDEO/DOCUMENT), se houver
   status        TEXT    DEFAULT 'pending',  -- pending | sent | delivered | read | failed | cancelled
   error_message TEXT,
   sent_at       DATETIME,

@@ -32,6 +32,16 @@ migrate()
       console.log(`[webhook] Verify token configured: ${!!process.env.META_WEBHOOK_VERIFY_TOKEN}`)
     })
 
+    // Every minute: fire scheduled campaigns whose time has come
+    cron.schedule('* * * * *', async () => {
+      try {
+        const { dispatchScheduledCampaigns } = require('./src/services/campanha.service')
+        await dispatchScheduledCampaigns()
+      } catch (err) {
+        console.error('[cron:scheduled] Error:', err.message)
+      }
+    })
+
     // Daily template sync — runs at 03:00 server time every day
     cron.schedule('0 3 * * *', async () => {
       console.log('[cron:templates] Starting daily template sync...')

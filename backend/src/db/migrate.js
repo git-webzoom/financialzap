@@ -31,6 +31,7 @@ async function migrate() {
   await addColumnIfMissing(db, 'campaign_contacts',  'wamid',           'TEXT')
   await addColumnIfMissing(db, 'campaign_contacts',  'delivered_at',    'DATETIME')
   await addColumnIfMissing(db, 'campaign_contacts',  'read_at',         'DATETIME')
+  await addColumnIfMissing(db, 'campaign_contacts',  'media_url',       'TEXT')
   await addColumnIfMissing(db, 'campaigns',          'read_count',      'INTEGER DEFAULT 0')
 
   // Índice para lookup de wamid no webhook (idempotente via IF NOT EXISTS)
