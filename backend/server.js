@@ -8,7 +8,9 @@ const app = express()
 const PORT = process.env.PORT || 3001
 
 app.use(cors())
-app.use(express.json())
+// trust proxy headers (EasyPanel/nginx reverse proxy)
+app.set('trust proxy', 1)
+app.use(express.json({ limit: '10mb' }))
 
 // Routes
 app.use('/api/auth',       require('./src/routes/auth.routes'))
@@ -26,6 +28,8 @@ migrate()
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`)
+      console.log(`[webhook] Endpoint: POST /api/webhook`)
+      console.log(`[webhook] Verify token configured: ${!!process.env.META_WEBHOOK_VERIFY_TOKEN}`)
     })
 
     // Daily template sync — runs at 03:00 server time every day

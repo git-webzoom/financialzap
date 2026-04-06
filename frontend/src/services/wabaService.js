@@ -29,3 +29,8 @@ export async function syncWaba(wabaId) {
   const { data } = await api.post(`/api/wabas/${wabaId}/sync`)
   return data
 }
+
+export async function subscribeWebhook(wabaId) {
+  const { data } = await api.post(`/api/wabas/${wabaId}/subscribe-webhook`)
+  return data
+}

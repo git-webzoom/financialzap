@@ -23,4 +23,7 @@ router.get('/:wabaId/phone-numbers', ctrl.phoneNumbers)
 // Manually re-sync phone numbers + templates for a WABA
 router.post('/:wabaId/sync', ctrl.sync)
 
+// Subscribe to Meta webhook events for a WABA (required for delivered/read/failed)
+router.post('/:wabaId/subscribe-webhook', ctrl.subscribeWebhook)
+
 module.exports = router

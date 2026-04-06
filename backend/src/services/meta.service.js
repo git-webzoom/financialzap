@@ -246,6 +246,34 @@ async function sendMessage(phoneNumberId, accessToken, payload) {
   return data
 }
 
+// ─── Webhook subscription ─────────────────────────────────────────────────────
+
+/**
+ * Subscribe the app to webhook events for a WABA.
+ * This is required for the Meta platform to send webhook notifications
+ * (delivered, read, failed status updates) to our webhook URL.
+ *
+ * Calls POST /{waba-id}/subscribed_apps
+ * The access token must have whatsapp_business_messaging permission.
+ */
+async function subscribeWebhook(wabaId, accessToken) {
+  const { data } = await metaApi.post(`/${wabaId}/subscribed_apps`, null, {
+    params: { access_token: accessToken },
+  })
+  return data
+}
+
+/**
+ * Get current webhook subscriptions for a WABA.
+ * Calls GET /{waba-id}/subscribed_apps
+ */
+async function getWebhookSubscriptions(wabaId, accessToken) {
+  const { data } = await metaApi.get(`/${wabaId}/subscribed_apps`, {
+    params: { access_token: accessToken },
+  })
+  return data
+}
+
 module.exports = {
   getWabasFromToken,
   getWabaInfo,
@@ -255,4 +283,6 @@ module.exports = {
   createTemplate,
   deleteTemplate,
   sendMessage,
+  subscribeWebhook,
+  getWebhookSubscriptions,
 }

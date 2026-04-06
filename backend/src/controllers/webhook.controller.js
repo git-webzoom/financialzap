@@ -17,6 +17,8 @@ function verify(req, res) {
   const token     = req.query['hub.verify_token']
   const challenge = req.query['hub.challenge']
 
+  console.log('[webhook] Verify request — mode:', mode, 'token matches:', token === VERIFY_TOKEN)
+
   if (mode === 'subscribe' && token === VERIFY_TOKEN) {
     console.log('[webhook] Verified successfully')
     return res.status(200).send(challenge)
@@ -34,12 +36,27 @@ async function receive(req, res) {
 
   try {
     const body = req.body
-    if (body.object !== 'whatsapp_business_account') return
+
+    // Log every incoming webhook for diagnosis
+    console.log('[webhook] Received body:', JSON.stringify(body))
+
+    if (body.object !== 'whatsapp_business_account') {
+      console.log('[webhook] Ignored — object is not whatsapp_business_account:', body.object)
+      return
+    }
 
     for (const entry of body.entry || []) {
       for (const change of entry.changes || []) {
+        console.log('[webhook] Change field:', change.field)
         if (change.field !== 'messages') continue
         const value = change.value
+
+        // Log statuses array
+        if (value.statuses?.length) {
+          console.log('[webhook] Statuses:', JSON.stringify(value.statuses))
+        } else {
+          console.log('[webhook] No statuses in this change (may be inbound message or other event)')
+        }
 
         for (const status of value.statuses || []) {
           await handleStatusUpdate(status)
@@ -47,7 +64,7 @@ async function receive(req, res) {
       }
     }
   } catch (err) {
-    console.error('[webhook] Processing error:', err.message)
+    console.error('[webhook] Processing error:', err.message, err.stack)
   }
 }
 
@@ -55,9 +72,13 @@ async function receive(req, res) {
 
 async function handleStatusUpdate(status) {
   const { id: wamid, status: newStatus, timestamp } = status
-  // newStatus: 'sent' | 'delivered' | 'read' | 'failed'
+  console.log(`[webhook] handleStatusUpdate — wamid=${wamid} newStatus=${newStatus}`)
 
-  if (!['delivered', 'read', 'failed'].includes(newStatus)) return
+  // newStatus: 'sent' | 'delivered' | 'read' | 'failed'
+  if (!['delivered', 'read', 'failed'].includes(newStatus)) {
+    console.log(`[webhook] Ignoring status "${newStatus}" (not delivered/read/failed)`)
+    return
+  }
 
   const db = getDb()
 
@@ -66,10 +87,16 @@ async function handleStatusUpdate(status) {
     sql: 'SELECT id, campaign_id, status FROM campaign_contacts WHERE wamid = ?',
     args: [wamid],
   })
-  if (!rows.length) return
+
+  if (!rows.length) {
+    console.log(`[webhook] No campaign_contact found for wamid=${wamid} — message may not be from a campaign`)
+    return
+  }
 
   const contact = rows[0]
   const ts = timestamp ? new Date(Number(timestamp) * 1000).toISOString() : null
+
+  console.log(`[webhook] Found contact id=${contact.id} campaign_id=${contact.campaign_id} current_status=${contact.status} → new=${newStatus}`)
 
   if (newStatus === 'delivered' && contact.status !== 'read') {
     await db.execute({
@@ -80,10 +107,11 @@ async function handleStatusUpdate(status) {
       sql: `UPDATE campaigns SET delivered = delivered + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
       args: [contact.campaign_id],
     })
+    console.log(`[webhook] Marked delivered — contact=${contact.id} campaign=${contact.campaign_id}`)
+
   } else if (newStatus === 'read') {
-    // read implies delivered — update both if not already
-    const updates = []
     if (contact.status !== 'read') {
+      // If not yet delivered, count delivered too
       if (contact.status !== 'delivered') {
         await db.execute({
           sql: `UPDATE campaigns SET delivered = delivered + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
@@ -98,23 +126,23 @@ async function handleStatusUpdate(status) {
         sql: `UPDATE campaigns SET read_count = read_count + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         args: [contact.campaign_id],
       })
+      console.log(`[webhook] Marked read — contact=${contact.id} campaign=${contact.campaign_id}`)
     }
+
   } else if (newStatus === 'failed') {
     const errMsg = status.errors?.[0]?.message || 'Delivery failed'
     await db.execute({
       sql: `UPDATE campaign_contacts SET status = 'failed', error_message = ? WHERE id = ?`,
       args: [errMsg.slice(0, 500), contact.id],
     })
-    // Only increment failed if not already failed
     if (contact.status !== 'failed') {
       await db.execute({
         sql: `UPDATE campaigns SET failed = failed + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
         args: [contact.campaign_id],
       })
     }
+    console.log(`[webhook] Marked failed — contact=${contact.id} campaign=${contact.campaign_id} err="${errMsg}"`)
   }
-
-  console.log(`[webhook] wamid=${wamid} status=${newStatus} contact=${contact.id} campaign=${contact.campaign_id}`)
 }
 
 module.exports = { verify, receive }

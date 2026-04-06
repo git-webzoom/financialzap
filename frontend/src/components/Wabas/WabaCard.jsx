@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import NumeroItem from './NumeroItem'
+import { subscribeWebhook } from '../../services/wabaService'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -31,10 +32,11 @@ function isWabaAlert(status) {
  *   onSync(wabaId)   — callback to sync
  */
 export default function WabaCard({ waba, phoneNumbers = [], onRevoke, onSync }) {
-  const [expanded, setExpanded]   = useState(true)
-  const [syncing, setSyncing]     = useState(false)
-  const [revoking, setRevoking]   = useState(false)
-  const [syncMsg, setSyncMsg]     = useState('')
+  const [expanded, setExpanded]       = useState(true)
+  const [syncing, setSyncing]         = useState(false)
+  const [revoking, setRevoking]       = useState(false)
+  const [subscribing, setSubscribing] = useState(false)
+  const [syncMsg, setSyncMsg]         = useState('')
 
   const alert  = isWabaAlert(waba.status)
   const sColor = wabaStatusColor(waba.status)
@@ -50,6 +52,20 @@ export default function WabaCard({ waba, phoneNumbers = [], onRevoke, onSync }) 
       setSyncMsg(`⚠ ${err.response?.data?.error || err.message}`)
     } finally {
       setSyncing(false)
+    }
+  }
+
+  async function handleSubscribeWebhook() {
+    setSubscribing(true)
+    setSyncMsg('')
+    try {
+      await subscribeWebhook(waba.waba_id)
+      setSyncMsg('✓ Webhook inscrito — notificações de entrega ativas')
+      setTimeout(() => setSyncMsg(''), 5000)
+    } catch (err) {
+      setSyncMsg(`⚠ Webhook: ${err.response?.data?.error || err.message}`)
+    } finally {
+      setSubscribing(false)
     }
   }
 
@@ -110,10 +126,13 @@ export default function WabaCard({ waba, phoneNumbers = [], onRevoke, onSync }) 
           </div>
 
           <div className="wc-actions">
-            <button className="wc-action-btn" onClick={handleSync} disabled={syncing || revoking} title="Sincronizar números e templates">
+            <button className="wc-action-btn" onClick={handleSync} disabled={syncing || revoking || subscribing} title="Sincronizar números e templates">
               <span className={syncing ? 'wc-spin' : ''}><IconRefresh /></span>
             </button>
-            <button className="wc-action-btn wc-action-btn--danger" onClick={handleRevoke} disabled={revoking || syncing} title="Desconectar WABA">
+            <button className="wc-action-btn wc-action-btn--webhook" onClick={handleSubscribeWebhook} disabled={subscribing || syncing || revoking} title="Inscrever webhook — necessário para receber status de entrega/leitura">
+              <span className={subscribing ? 'wc-spin' : ''}><IconWebhook /></span>
+            </button>
+            <button className="wc-action-btn wc-action-btn--danger" onClick={handleRevoke} disabled={revoking || syncing || subscribing} title="Desconectar WABA">
               <IconTrash />
             </button>
           </div>
@@ -192,6 +211,14 @@ function IconRefresh() {
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="M2.5 8A5.5 5.5 0 0113 4.5M13.5 8A5.5 5.5 0 013 11.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
       <path d="M11 2.5l2 2-2 2M5 13.5l-2-2 2-2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+}
+
+function IconWebhook() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M6 3a2 2 0 100 4 2 2 0 000-4zM6 5v2.5M6 7.5L3 13h10L10 7.5M10 7.5V5a2 2 0 10-4 0" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   )
 }
@@ -321,6 +348,11 @@ const CSS = `
     color: #8a94a6;
     border-color: #374151;
     background: #252c38;
+  }
+  .wc-action-btn--webhook:hover:not(:disabled) {
+    color: #3b82f6;
+    border-color: #3b82f640;
+    background: #3b82f615;
   }
   .wc-action-btn--danger:hover:not(:disabled) {
     color: #ef4444;

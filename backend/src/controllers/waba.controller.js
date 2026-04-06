@@ -96,4 +96,38 @@ async function sync(req, res) {
   }
 }
 
-module.exports = { lookup, connect, list, revoke, phoneNumbers, sync }
+// POST /api/wabas/:wabaId/subscribe-webhook
+// Re-subscribe to Meta webhook events for a WABA.
+// Required for delivered/read/failed status updates to work.
+async function subscribeWebhook(req, res) {
+  try {
+    const db = require('../db/database').getDb()
+    const { rows } = await db.execute({
+      sql: 'SELECT waba_id, access_token_enc FROM wabas WHERE waba_id = ? AND user_id = ?',
+      args: [req.params.wabaId, req.user.sub],
+    })
+    if (!rows.length) return res.status(404).json({ error: 'WABA not found' })
+
+    const token = wabaService.getDecryptedToken(rows[0])
+
+    // Check current subscriptions
+    let current = null
+    try {
+      current = await metaService.getWebhookSubscriptions(req.params.wabaId, token)
+    } catch (err) {
+      console.error('[subscribeWebhook] getWebhookSubscriptions failed:', err.response?.data?.error?.message || err.message)
+    }
+
+    // Subscribe
+    const result = await metaService.subscribeWebhook(req.params.wabaId, token)
+    console.log('[subscribeWebhook] Result:', JSON.stringify(result))
+
+    res.json({ ok: true, result, current_subscriptions: current })
+  } catch (err) {
+    const msg = err.response?.data?.error?.message || err.message
+    console.error('[subscribeWebhook] Error:', msg)
+    res.status(err.status || 500).json({ error: msg })
+  }
+}
+
+module.exports = { lookup, connect, list, revoke, phoneNumbers, sync, subscribeWebhook }

@@ -106,6 +106,15 @@ async function connectWaba(userId, wabaId, accessToken) {
     console.error('[connectWaba] STEP 4 — syncTemplates FAILED (non-fatal):', err.message)
   }
 
+  // 5. Subscribe to webhook events (non-fatal — required for delivered/read/failed status updates)
+  console.log('[connectWaba] STEP 5 — subscribeWebhook | wabaId:', wabaId)
+  try {
+    const subResult = await metaService.subscribeWebhook(wabaId, accessToken)
+    console.log('[connectWaba] STEP 5 — subscribeWebhook OK:', JSON.stringify(subResult))
+  } catch (err) {
+    console.error('[connectWaba] STEP 5 — subscribeWebhook FAILED (non-fatal):', err.response?.data?.error?.message || err.message)
+  }
+
   return {
     waba_id: wabaId,
     name,
