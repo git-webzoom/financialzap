@@ -73,7 +73,10 @@ async function createTemplate(userId, wabaId, payload) {
   try {
     metaResult = await metaService.createTemplate(wabaId, token, payload)
   } catch (err) {
-    const metaError = err.response?.data?.error?.message || err.message
+    const metaErr = err.response?.data?.error
+    console.error('[createTemplate] Meta error:', JSON.stringify(metaErr || err.message))
+    console.error('[createTemplate] Payload sent:', JSON.stringify(payload))
+    const metaError = metaErr?.error_user_msg || metaErr?.message || err.message
     throw new Error(`Meta API error: ${metaError}`)
   }
 
