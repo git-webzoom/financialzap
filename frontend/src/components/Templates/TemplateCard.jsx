@@ -33,13 +33,25 @@ function bodyText(structure) {
   return body?.text || null
 }
 
-function hasMedia(structure) {
+function headerInfo(structure) {
   if (!Array.isArray(structure)) return null
   const header = structure.find(c => c.type === 'HEADER')
   if (!header) return null
-  if (header.format === 'IMAGE') return 'Imagem'
-  if (header.format === 'VIDEO') return 'Vídeo'
-  if (header.format === 'DOCUMENT') return 'Documento'
+  // Tenta extrair URL de exemplo (header_url ou header_handle)
+  const url =
+    header.example?.header_url?.[0] ||
+    header.example?.header_handle?.[0] ||
+    null
+  return { format: header.format, url }
+}
+
+// mantido para compatibilidade interna
+function hasMedia(structure) {
+  const info = headerInfo(structure)
+  if (!info) return null
+  if (info.format === 'IMAGE') return 'Imagem'
+  if (info.format === 'VIDEO') return 'Vídeo'
+  if (info.format === 'DOCUMENT') return 'Documento'
   return null
 }
 
@@ -55,11 +67,12 @@ function buttons(structure) {
  *   template — template object from API/DB
  */
 export default function TemplateCard({ template }) {
-  const sc      = statusConfig(template.status)
-  const text    = bodyText(template.structure)
-  const media   = hasMedia(template.structure)
-  const btns    = buttons(template.structure)
-  const catLabel = CATEGORY_LABELS[template.category] || template.category || '—'
+  const sc       = statusConfig(template.status)
+  const text     = bodyText(template.structure)
+  const hInfo    = headerInfo(template.structure)
+  const media    = hasMedia(template.structure)
+  const btns     = buttons(template.structure)
+  const catLabel  = CATEGORY_LABELS[template.category] || template.category || '—'
   const langLabel = LANGUAGE_LABELS[template.language] || template.language || '—'
 
   return (
@@ -111,6 +124,24 @@ export default function TemplateCard({ template }) {
             )}
           </div>
         </div>
+
+        {/* ── Media preview ── */}
+        {hInfo?.url && hInfo.format === 'IMAGE' && (
+          <div className="tc-media-wrap">
+            <img src={hInfo.url} alt="preview" className="tc-media-img" />
+          </div>
+        )}
+        {hInfo?.url && hInfo.format === 'VIDEO' && (
+          <div className="tc-media-wrap">
+            <video src={hInfo.url} className="tc-media-video" controls preload="metadata" />
+          </div>
+        )}
+        {hInfo && !hInfo.url && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(hInfo.format) && (
+          <div className="tc-media-placeholder">
+            <IconMediaLarge format={hInfo.format} />
+            <span>{hInfo.format === 'IMAGE' ? 'Imagem' : hInfo.format === 'VIDEO' ? 'Vídeo' : 'Documento'} — URL enviada no disparo</span>
+          </div>
+        )}
 
         {/* ── Body preview ── */}
         {text && (
@@ -183,6 +214,30 @@ function IconClock() {
     <svg width="10" height="10" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.4"/>
       <path d="M8 5v3l2 2" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+}
+
+function IconMediaLarge({ format }) {
+  if (format === 'VIDEO') return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="2" y="4" width="15" height="16" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+      <path d="M17 9l5-3v12l-5-3V9z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+      <path d="M7.5 9.5l5 2.5-5 2.5V9.5z" fill="currentColor"/>
+    </svg>
+  )
+  if (format === 'DOCUMENT') return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+      <path d="M14 2v6h6M8 13h8M8 17h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  )
+  // IMAGE
+  return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="1.5"/>
+      <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/>
+      <path d="M3 15l5-5 4 4 3-3 6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   )
 }
@@ -285,4 +340,41 @@ const CSS = `
     color: #374151;
     font-family: 'DM Sans', sans-serif;
   }
+
+  .tc-media-wrap {
+    border-radius: 8px;
+    overflow: hidden;
+    background: #0a0d10;
+    border: 1px solid #1a1f28;
+    max-height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .tc-media-img {
+    width: 100%;
+    max-height: 220px;
+    object-fit: cover;
+    display: block;
+  }
+  .tc-media-video {
+    width: 100%;
+    max-height: 220px;
+    display: block;
+    background: #000;
+  }
+
+  .tc-media-placeholder {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    background: #0a0d10;
+    border: 1px dashed #252c38;
+    color: #4a5568;
+    font-size: 12px;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .tc-media-placeholder svg { flex-shrink: 0; color: #374151; }
 `
