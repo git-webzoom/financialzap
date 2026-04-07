@@ -101,6 +101,7 @@ export default function Templates() {
   const wabas = useMemo(() => groups.flatMap(g => g.wabas), [groups])
 
   const [filterWabaId,  setFilterWabaId]  = useState('')
+  const [searchName,    setSearchName]    = useState('')
   const [showForm,      setShowForm]      = useState(false)
   const [submitting,    setSubmitting]    = useState(false)
   const [formError,     setFormError]     = useState('')
@@ -123,7 +124,7 @@ export default function Templates() {
   // Reset selection when data changes
   useEffect(() => { setSelected(new Set()) }, [templates])
   // Reset page when filter/sort changes
-  useEffect(() => { setPage(1) }, [statusFilter, filterWabaId, sortKey, sortDir])
+  useEffect(() => { setPage(1) }, [statusFilter, filterWabaId, searchName, sortKey, sortDir])
 
   const lastSync = useMemo(() => {
     if (!templates.length) return null
@@ -142,9 +143,14 @@ export default function Templates() {
   }, [templates])
 
   const filtered = useMemo(() => {
-    if (statusFilter === 'ALL') return templates
-    return templates.filter(t => t.status?.toUpperCase() === statusFilter)
-  }, [templates, statusFilter])
+    let list = templates
+    if (statusFilter !== 'ALL') list = list.filter(t => t.status?.toUpperCase() === statusFilter)
+    if (searchName.trim()) {
+      const q = searchName.trim().toLowerCase()
+      list = list.filter(t => t.name?.toLowerCase().includes(q))
+    }
+    return list
+  }, [templates, statusFilter, searchName])
 
   const NUMERIC_COLS = new Set(['sent_count'])
 
@@ -363,6 +369,20 @@ export default function Templates() {
 
         {/* ── Filters ── */}
         <div className="tp-filters">
+          <div className="tp-search-wrap">
+            <span className="tp-search-icon"><IconSearch /></span>
+            <input
+              className="tp-search"
+              placeholder="Buscar por nome…"
+              value={searchName}
+              onChange={e => setSearchName(e.target.value)}
+              disabled={loading}
+            />
+            {searchName && (
+              <button className="tp-search-clear" onClick={() => setSearchName('')}>✕</button>
+            )}
+          </div>
+
           <select
             className="tp-select"
             value={filterWabaId}
@@ -393,7 +413,7 @@ export default function Templates() {
         {loading ? (
           <div className="tp-loading"><span className="tp-spinner" /> Carregando templates…</div>
         ) : visible.length === 0 ? (
-          <EmptyState hasFilter={statusFilter !== 'ALL' || !!filterWabaId} />
+          <EmptyState hasFilter={statusFilter !== 'ALL' || !!filterWabaId || !!searchName} />
         ) : (
           <>
           <div className="tbl-wrap">
@@ -670,6 +690,15 @@ function MetaItem({ label, value, mono, danger }) {
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
+
+function IconSearch() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" strokeWidth="1.5"/>
+      <path d="M10 10l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  )
+}
 
 function IconRefresh() {
   return (
@@ -1096,7 +1125,28 @@ const CSS = `
   .tp-close-btn:hover:not(:disabled) { color: #e8edf5; background: #252c38; }
 
   /* ── Filters ── */
-  .tp-filters { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .tp-filters { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+  .tp-search-wrap {
+    display: flex; align-items: center; gap: 7px;
+    background: #1a1f28; border: 1px solid #252c38;
+    border-radius: 8px; padding: 0 10px;
+    transition: border-color 0.15s; min-width: 200px;
+  }
+  .tp-search-wrap:focus-within { border-color: #22c55e60; }
+  .tp-search-icon { color: #4a5568; display: flex; flex-shrink: 0; }
+  .tp-search {
+    flex: 1; background: transparent; border: none; outline: none;
+    color: #e8edf5; font-family: 'DM Sans', sans-serif; font-size: 13px;
+    padding: 8px 0;
+  }
+  .tp-search::placeholder { color: #374151; }
+  .tp-search-clear {
+    background: none; border: none; color: #4a5568; cursor: pointer;
+    font-size: 12px; padding: 2px 0; flex-shrink: 0;
+    transition: color 0.15s;
+  }
+  .tp-search-clear:hover { color: #8a94a6; }
   .tp-select {
     background: #1a1f28;
     border: 1px solid #252c38;
