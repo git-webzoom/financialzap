@@ -145,4 +145,12 @@ async function handleStatusUpdate(status) {
   }
 }
 
-module.exports = { verify, receive }
+// ─── Ping — public endpoint to confirm the webhook URL is reachable ───────────
+// GET /api/webhook/ping — returns 200 with timestamp, no auth required
+function ping(req, res) {
+  const ts = new Date().toISOString()
+  console.log('[webhook] PING hit at', ts, '— IP:', req.ip)
+  res.json({ ok: true, ts, message: 'webhook endpoint is reachable' })
+}
+
+module.exports = { verify, receive, ping }
