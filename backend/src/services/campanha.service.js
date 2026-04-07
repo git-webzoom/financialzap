@@ -85,15 +85,15 @@ async function enqueueJobs(campaignId) {
   if (!campRes.rows.length) throw new Error(`Campaign ${campaignId} not found`)
   const { waba_id: wabaId, phone_number_id: phoneNumberId, speed_per_second } = campRes.rows[0]
 
-  // Busca todos os contatos pending
+  // Busca todos os contatos pending com dados do template (JOIN por waba_id também)
   const contactsRes = await db.execute({
     sql: `SELECT cc.id, cc.phone, cc.template_id, cc.variables, cc.media_url,
                  t.name AS template_name, t.language, t.structure
           FROM campaign_contacts cc
-          JOIN templates t ON t.template_id = cc.template_id
+          JOIN templates t ON t.template_id = cc.template_id AND t.waba_id = ?
           WHERE cc.campaign_id = ? AND cc.status = 'pending'
           ORDER BY cc.id ASC`,
-    args: [campaignId],
+    args: [wabaId, campaignId],
   })
   const contacts = contactsRes.rows
 
@@ -159,7 +159,11 @@ async function createCampanha(userId, draft) {
   if (!csvRows.length)     throw new Error('Nenhum contato no CSV.')
 
   const isScheduled    = scheduleType === 'scheduled' && scheduledAt
-  const scheduledAtVal = isScheduled ? scheduledAt : null
+  // Normalize to SQLite datetime format (YYYY-MM-DD HH:MM:SS) so comparisons
+  // with CURRENT_TIMESTAMP work correctly. The frontend sends ISO 8601 with T/Z.
+  const scheduledAtVal = isScheduled
+    ? new Date(scheduledAt).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '')
+    : null
 
   // 1. Insert campaign row
   const campaignRes = await db.execute({
@@ -273,6 +277,11 @@ async function createCampanha(userId, draft) {
 async function dispatchScheduledCampaigns() {
   const db = getDb()
 
+  // Debug: log current time so we can compare with scheduled_at values
+  const nowRes = await db.execute({ sql: `SELECT CURRENT_TIMESTAMP as now`, args: [] })
+  const dbNow = nowRes.rows[0]?.now
+  console.log(`[cron:scheduled] DB CURRENT_TIMESTAMP=${dbNow}`)
+
   // Pick up: scheduled campaigns whose time has come + queuing campaigns stuck > 2 min
   const { rows } = await db.execute({
     sql: `SELECT id, name, scheduled_at, status FROM campaigns
@@ -281,7 +290,18 @@ async function dispatchScheduledCampaigns() {
     args: [],
   })
 
-  if (!rows.length) return
+  if (!rows.length) {
+    // Log all scheduled campaigns so we can see why they didn't match
+    const { rows: pending } = await db.execute({
+      sql: `SELECT id, name, status, scheduled_at FROM campaigns WHERE status IN ('scheduled','queuing')`,
+      args: [],
+    })
+    if (pending.length) {
+      console.log(`[cron:scheduled] ${pending.length} scheduled/queuing campaign(s) not yet due:`,
+        pending.map(r => `id=${r.id} scheduled_at="${r.scheduled_at}" status=${r.status}`).join(', '))
+    }
+    return
+  }
 
   for (const campaign of rows) {
     console.log(`[cron:scheduled] Firing campaign ${campaign.id} "${campaign.name}" (was scheduled for ${campaign.scheduled_at})`)
