@@ -9,6 +9,7 @@
  */
 import { useEffect, useState, useCallback } from 'react'
 import { getMe, updateMe, listUsers, createUser, deleteUser } from '../../services/authService'
+import { listWabas, subscribeWebhook, getWebhookStatus } from '../../services/wabaService'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -20,10 +21,11 @@ function fmtDate(iso) {
 }
 
 const TABS = [
-  { id: 'perfil',    label: 'Perfil',    icon: IconUser  },
-  { id: 'seguranca', label: 'Segurança', icon: IconLock  },
-  { id: 'usuarios',  label: 'Usuários',  icon: IconUsers },
-  { id: 'sobre',     label: 'Sobre',     icon: IconInfo  },
+  { id: 'perfil',    label: 'Perfil',    icon: IconUser    },
+  { id: 'seguranca', label: 'Segurança', icon: IconLock    },
+  { id: 'usuarios',  label: 'Usuários',  icon: IconUsers   },
+  { id: 'webhook',   label: 'Webhook',   icon: IconWebhook },
+  { id: 'sobre',     label: 'Sobre',     icon: IconInfo    },
 ]
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -77,6 +79,7 @@ export default function Configuracoes() {
           {tab === 'perfil'    && <ProfileSection   profile={profile} onUpdated={loadProfile} />}
           {tab === 'seguranca' && <PasswordSection  />}
           {tab === 'usuarios'  && <UsersSection     currentUserId={profile?.id} />}
+          {tab === 'webhook'   && <WebhookSection   />}
           {tab === 'sobre'     && <AboutSection     profile={profile} />}
         </div>
 
@@ -448,6 +451,130 @@ function Spinner({ dark }) {
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
+// ─── WebhookSection ───────────────────────────────────────────────────────────
+
+function WebhookSection() {
+  const [wabas,   setWabas]   = useState([])
+  const [loading, setLoading] = useState(true)
+  const [statuses, setStatuses] = useState({}) // wabaId → { loading, data, error }
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const { groups } = await listWabas()
+        const all = groups.flatMap(g => g.wabas)
+        setWabas(all)
+        // Auto-check status for all WABAs
+        all.forEach(w => checkStatus(w.waba_id))
+      } catch {
+        // ignore
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  async function checkStatus(wabaId) {
+    setStatuses(s => ({ ...s, [wabaId]: { loading: true, data: null, error: null } }))
+    try {
+      const data = await getWebhookStatus(wabaId)
+      setStatuses(s => ({ ...s, [wabaId]: { loading: false, data, error: null } }))
+    } catch (err) {
+      setStatuses(s => ({ ...s, [wabaId]: { loading: false, data: null, error: err.response?.data?.error || err.message } }))
+    }
+  }
+
+  async function handleSubscribe(wabaId) {
+    setStatuses(s => ({ ...s, [wabaId]: { ...s[wabaId], loading: true } }))
+    try {
+      await subscribeWebhook(wabaId)
+      await checkStatus(wabaId)
+    } catch (err) {
+      setStatuses(s => ({ ...s, [wabaId]: { loading: false, data: s[wabaId]?.data || null, error: err.response?.data?.error || err.message } }))
+    }
+  }
+
+  return (
+    <div className="cfg-section">
+      <div className="cfg-section-header">
+        <div className="cfg-section-icon"><IconWebhook /></div>
+        <div>
+          <p className="cfg-section-title">Diagnóstico de Webhook</p>
+          <p className="cfg-section-desc">Verifique se cada WABA está recebendo notificações de entrega e leitura da Meta</p>
+        </div>
+      </div>
+
+      {/* Instrução */}
+      <div className="wh-instructions">
+        <p className="wh-instr-title">Configuração necessária no Meta App Dashboard</p>
+        <ol className="wh-instr-steps">
+          <li>Acesse <strong>developers.facebook.com</strong> → seu app → <strong>WhatsApp → Configuration</strong></li>
+          <li>Em <strong>Webhook</strong>, clique em <strong>Edit</strong></li>
+          <li>Callback URL: <code>{window.location.origin.replace('localhost:5173', window.ENV_API_URL || 'seu-dominio') || ''}/api/webhook</code></li>
+          <li>Verify Token: o valor de <code>META_WEBHOOK_VERIFY_TOKEN</code> no .env do backend</li>
+          <li>Clique em <strong>Verify and Save</strong>, depois ative o campo <strong>messages</strong></li>
+        </ol>
+        <p className="wh-instr-note">Após configurar, clique em <strong>Inscrever</strong> em cada WABA abaixo.</p>
+      </div>
+
+      {/* Lista de WABAs */}
+      {loading ? (
+        <div className="wh-loading"><span className="cfg-spinner" /> Carregando WABAs…</div>
+      ) : wabas.length === 0 ? (
+        <div className="wh-loading" style={{ color: '#4a5568' }}>Nenhuma WABA conectada.</div>
+      ) : (
+        <div className="wh-list">
+          {wabas.map(w => {
+            const st = statuses[w.waba_id]
+            const subscribed = st?.data?.subscribed
+            const wamid = st?.data?.wamid_saved_last_24h ?? '—'
+            const received = st?.data?.webhooks_received_last_24h ?? '—'
+
+            return (
+              <div key={w.waba_id} className="wh-row">
+                <div className="wh-row-left">
+                  <span className="wh-waba-name">{w.name || w.waba_id}</span>
+                  <span className="wh-waba-id">{w.waba_id}</span>
+                </div>
+
+                {st?.loading ? (
+                  <span className="cfg-spinner" />
+                ) : st?.error ? (
+                  <span className="wh-badge wh-badge--err" title={st.error}>Erro</span>
+                ) : st?.data ? (
+                  <div className="wh-row-stats">
+                    <span className={`wh-badge ${subscribed ? 'wh-badge--ok' : 'wh-badge--warn'}`}>
+                      {subscribed ? '✓ Inscrito' : '✗ Não inscrito'}
+                    </span>
+                    <span className="wh-stat" title="Mensagens com wamid salvo nas últimas 24h">
+                      <span className="wh-stat-val">{wamid}</span>
+                      <span className="wh-stat-lbl">enviados 24h</span>
+                    </span>
+                    <span className="wh-stat" title="Webhooks de entrega/leitura recebidos nas últimas 24h">
+                      <span className="wh-stat-val" style={received > 0 ? { color: '#22c55e' } : {}}>{received}</span>
+                      <span className="wh-stat-lbl">webhooks 24h</span>
+                    </span>
+                  </div>
+                ) : null}
+
+                <div className="wh-row-actions">
+                  <button className="cfg-btn cfg-btn--ghost" onClick={() => checkStatus(w.waba_id)} disabled={st?.loading} title="Verificar status">
+                    ↺
+                  </button>
+                  <button className="cfg-btn cfg-btn--subscribe" onClick={() => handleSubscribe(w.waba_id)} disabled={st?.loading}>
+                    {st?.loading ? <span className="cfg-spinner cfg-spinner--dark" /> : 'Inscrever'}
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function IconUser() {
   return (
     <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true">
@@ -501,6 +628,17 @@ function IconEyeOff() {
   return (
     <svg width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">
       <path d="M3 3l14 14M8.5 8.6A2.5 2.5 0 0012.4 12M6.5 5.6C4.3 6.9 2.5 9 1 10c1.5 1 4.5 5 9 5a8.5 8.5 0 004.5-1.4M9 5.1A8.5 8.5 0 0119 10c-.8.6-2 1.7-3.5 2.6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
+function IconWebhook() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <circle cx="7" cy="5" r="2.5" stroke="currentColor" strokeWidth="1.5"/>
+      <circle cx="7" cy="15" r="2.5" stroke="currentColor" strokeWidth="1.5"/>
+      <circle cx="16" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.5"/>
+      <path d="M9.5 5h2a3 3 0 013 3v1M9.5 15h2a3 3 0 003-3v-1M7 7.5v5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
     </svg>
   )
 }
@@ -723,6 +861,98 @@ const CSS = `
     display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px;
   }
 
+  /* ── Webhook section ── */
+  .wh-instructions {
+    margin: 0 22px 0; padding: 14px 16px;
+    background: #3b82f608; border: 1px solid #3b82f620;
+    border-radius: 9px; margin: 16px 22px 0;
+  }
+  .wh-instr-title {
+    font-family: 'DM Sans', sans-serif; font-size: 12px;
+    font-weight: 600; color: #93c5fd; margin: 0 0 8px;
+    text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .wh-instr-steps {
+    font-family: 'DM Sans', sans-serif; font-size: 12px;
+    color: #8a94a6; margin: 0 0 8px; padding-left: 18px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .wh-instr-steps strong { color: #bfdbfe; }
+  .wh-instr-steps code {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    background: #1a1f28; padding: 1px 5px; border-radius: 4px; color: #93c5fd;
+  }
+  .wh-instr-note {
+    font-family: 'DM Sans', sans-serif; font-size: 12px;
+    color: #4a5568; margin: 0;
+  }
+  .wh-instr-note strong { color: #8a94a6; }
+
+  .wh-loading {
+    display: flex; align-items: center; gap: 8px;
+    padding: 24px 22px;
+    font-family: 'DM Sans', sans-serif; font-size: 13px; color: #4a5568;
+  }
+
+  .wh-list { display: flex; flex-direction: column; margin-top: 12px; }
+
+  .wh-row {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 14px 22px; border-top: 1px solid #1a1f28;
+  }
+  .wh-row-left { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+  .wh-waba-name {
+    font-family: 'DM Sans', sans-serif; font-size: 13px;
+    font-weight: 600; color: #e8edf5;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .wh-waba-id {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #4a5568;
+  }
+
+  .wh-row-stats { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+  .wh-badge {
+    display: inline-flex; align-items: center;
+    padding: 3px 10px; border-radius: 999px;
+    font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 600;
+    white-space: nowrap;
+  }
+  .wh-badge--ok   { background: #22c55e15; border: 1px solid #22c55e30; color: #86efac; }
+  .wh-badge--warn { background: #f59e0b15; border: 1px solid #f59e0b30; color: #fcd34d; }
+  .wh-badge--err  { background: #ef444415; border: 1px solid #ef444430; color: #fca5a5; }
+
+  .wh-stat {
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+  }
+  .wh-stat-val {
+    font-family: 'JetBrains Mono', monospace; font-size: 14px;
+    font-weight: 700; color: #e8edf5;
+  }
+  .wh-stat-lbl {
+    font-family: 'DM Sans', sans-serif; font-size: 10px; color: #4a5568;
+    white-space: nowrap;
+  }
+
+  .wh-row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .cfg-btn--ghost {
+    background: #1a1f28; border: 1px solid #252c38; color: #4a5568;
+    padding: 7px 10px; border-radius: 8px;
+    font-family: 'DM Sans', sans-serif; font-size: 13px;
+    cursor: pointer; transition: color 0.15s, background 0.15s;
+  }
+  .cfg-btn--ghost:hover:not(:disabled) { background: #252c38; color: #8a94a6; }
+  .cfg-btn--ghost:disabled { opacity: 0.4; cursor: not-allowed; }
+  .cfg-btn--subscribe {
+    background: #3b82f618; border: 1px solid #3b82f640; color: #93c5fd;
+    padding: 7px 14px; border-radius: 8px;
+    font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .cfg-btn--subscribe:hover:not(:disabled) { background: #3b82f625; }
+  .cfg-btn--subscribe:disabled { opacity: 0.4; cursor: not-allowed; }
+
   @media (max-width: 700px) {
     .cfg-new-user-fields { grid-template-columns: 1fr; }
     .cfg-tabs { width: 100%; }
@@ -732,5 +962,7 @@ const CSS = `
     .cfg-about-grid { padding: 4px 16px 16px; }
     .cfg-new-user-form { padding: 14px 16px; }
     .cfg-user-row { padding: 12px 16px; }
+    .wh-row { padding: 12px 16px; }
+    .wh-instructions { margin: 12px 16px 0; }
   }
 `
