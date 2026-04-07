@@ -60,8 +60,8 @@ export default function WabaCard({ waba, phoneNumbers = [], onRevoke, onSync }) 
     setSyncMsg('')
     try {
       await subscribeWebhook(waba.waba_id)
-      setSyncMsg('✓ Webhook inscrito — notificações de entrega ativas')
-      setTimeout(() => setSyncMsg(''), 5000)
+      setSyncMsg('✓ Webhook inscrito — para receber Entregues/Lidas, configure também a Callback URL no Meta App Dashboard → WhatsApp → Configuration com o campo "messages" ativo')
+      setTimeout(() => setSyncMsg(''), 10000)
     } catch (err) {
       setSyncMsg(`⚠ Webhook: ${err.response?.data?.error || err.message}`)
     } finally {
@@ -129,7 +129,7 @@ export default function WabaCard({ waba, phoneNumbers = [], onRevoke, onSync }) 
             <button className="wc-action-btn" onClick={handleSync} disabled={syncing || revoking || subscribing} title="Sincronizar números e templates">
               <span className={syncing ? 'wc-spin' : ''}><IconRefresh /></span>
             </button>
-            <button className="wc-action-btn wc-action-btn--webhook" onClick={handleSubscribeWebhook} disabled={subscribing || syncing || revoking} title="Inscrever webhook — necessário para receber status de entrega/leitura">
+            <button className="wc-action-btn wc-action-btn--webhook" onClick={handleSubscribeWebhook} disabled={subscribing || syncing || revoking} title="Inscrever webhook — clique para ativar notificações de entrega/leitura. Certifique-se também de configurar a Callback URL no Meta App Dashboard → WhatsApp → Configuration">
               <span className={subscribing ? 'wc-spin' : ''}><IconWebhook /></span>
             </button>
             <button className="wc-action-btn wc-action-btn--danger" onClick={handleRevoke} disabled={revoking || syncing || subscribing} title="Desconectar WABA">

@@ -90,7 +90,7 @@ const COLS = [
   { key: 'category',    label: 'Categoria' },
   { key: 'language',    label: 'Idioma' },
   { key: 'status',      label: 'Status' },
-  { key: 'sent_count',  label: 'Disparos' },
+  { key: 'waba_id',     label: 'WABA' },
   { key: 'created_at',  label: 'Criado em' },
 ]
 
@@ -152,7 +152,7 @@ export default function Templates() {
     return list
   }, [templates, statusFilter, searchName])
 
-  const NUMERIC_COLS = new Set(['sent_count'])
+  const NUMERIC_COLS = new Set([])
 
   const visible = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -472,11 +472,8 @@ export default function Templates() {
                       <td className="tbl-td">{CATEGORY_LABELS[t.category] || t.category || '—'}</td>
                       <td className="tbl-td">{t.language || '—'}</td>
                       <td className="tbl-td"><StatusBadge status={t.status} /></td>
-                      <td className="tbl-td tbl-td--sent">
-                        {t.sent_count > 0
-                          ? <span className="tbl-sent-count">{Number(t.sent_count).toLocaleString('pt-BR')}</span>
-                          : <span className="tbl-dash">—</span>
-                        }
+                      <td className="tbl-td">
+                        {wabas.find(w => w.waba_id === t.waba_id)?.name || t.waba_id || '—'}
                       </td>
                       <td className="tbl-td tbl-td--date">{formatDatePT(t.created_at)}</td>
                       <td className="tbl-td tbl-td--actions" onClick={e => e.stopPropagation()}>

@@ -26,4 +26,7 @@ router.post('/:wabaId/sync', ctrl.sync)
 // Subscribe to Meta webhook events for a WABA (required for delivered/read/failed)
 router.post('/:wabaId/subscribe-webhook', ctrl.subscribeWebhook)
 
+// Diagnostic: check if WABA is subscribed and if webhooks are arriving
+router.get('/:wabaId/webhook-status', ctrl.webhookStatus)
+
 module.exports = router

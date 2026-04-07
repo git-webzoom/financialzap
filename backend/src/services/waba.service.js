@@ -33,6 +33,11 @@ function decrypt(encoded) {
   return decipher.update(data) + decipher.final('utf8')
 }
 
+// In-memory cache to avoid calling subscribeWebhook on every list request
+// Key: wabaId, Value: timestamp of last successful subscribe call
+const _subscribeCache = new Map()
+const SUBSCRIBE_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
+
 // ─── Connect WABA ─────────────────────────────────────────────────────────────
 
 /**
@@ -133,6 +138,7 @@ async function listWabasByUser(userId) {
     sql: `
       SELECT w.id, w.waba_id, w.name, w.business_id, w.business_name,
              w.currency, w.timezone, w.status, w.created_at,
+             w.access_token_enc,
              (SELECT COUNT(*) FROM phone_numbers p WHERE p.waba_id = w.waba_id) AS phone_count,
              (SELECT COUNT(*) FROM templates t WHERE t.waba_id = w.waba_id)     AS template_count
       FROM wabas w
@@ -141,6 +147,20 @@ async function listWabasByUser(userId) {
     `,
     args: [userId],
   })
+
+  // Auto-subscribe all WABAs to receive webhook events (non-fatal, once per hour max)
+  // This ensures WABAs connected before subscribeWebhook was implemented also get subscribed
+  for (const row of rows) {
+    const lastSubscribed = _subscribeCache.get(row.waba_id) || 0
+    if (Date.now() - lastSubscribed < SUBSCRIBE_INTERVAL_MS) continue
+    try {
+      const token = decrypt(row.access_token_enc)
+      await metaService.subscribeWebhook(row.waba_id, token)
+      _subscribeCache.set(row.waba_id, Date.now())
+    } catch {
+      // Non-fatal — WABA may have expired token or other issue
+    }
+  }
 
   // Group by business for frontend display
   const byBusiness = {}

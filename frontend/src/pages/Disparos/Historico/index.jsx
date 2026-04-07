@@ -449,13 +449,26 @@ function DetailPanel({ campaign, contacts, meta, loading, filter, onFilter, page
 
       {/* Static stats for finished/cancelled/failed campaigns */}
       {!ACTIVE.has(campaign.status) && (
-        <div className="dp-stats">
-          <StatBox label="Total"     value={campaign.total_contacts} />
-          <StatBox label="Enviados"  value={campaign.sent}           color="#22c55e" />
-          <StatBox label="Entregues" value={campaign.delivered}      color="#3b82f6" />
-          <StatBox label="Lidas"     value={campaign.read_count}     color="#8b5cf6" />
-          <StatBox label="Falhas"    value={campaign.failed}         color="#ef4444" />
-        </div>
+        <>
+          <div className="dp-stats">
+            <StatBox label="Total"     value={campaign.total_contacts} />
+            <StatBox label="Enviados"  value={campaign.sent}           color="#22c55e" />
+            <StatBox label="Entregues" value={campaign.delivered}      color="#3b82f6" />
+            <StatBox label="Lidas"     value={campaign.read_count}     color="#8b5cf6" />
+            <StatBox label="Falhas"    value={campaign.failed}         color="#ef4444" />
+          </div>
+          {Number(campaign.sent) > 0 && Number(campaign.delivered) === 0 && Number(campaign.read_count) === 0 && (
+            <div className="dp-webhook-warn">
+              <span className="dp-webhook-warn-icon">ℹ</span>
+              <span>
+                Entregues e Lidas mostram 0 porque os webhooks da Meta ainda não foram recebidos.
+                Verifique no <strong>Meta App Dashboard → WhatsApp → Configuration</strong> se a
+                URL de callback está configurada e o campo <strong>messages</strong> está ativo.
+                Depois, clique no botão de webhook (🔗) em cada WABA conectada.
+              </span>
+            </div>
+          )}
+        </>
       )}
 
       {/* Contacts filter */}
@@ -694,6 +707,16 @@ const CSS = `
   .dp-stat-lbl {
     font-family: 'DM Sans', sans-serif; font-size: 11px; color: #4a5568;
   }
+
+  /* ── Webhook warning ── */
+  .dp-webhook-warn {
+    display: flex; align-items: flex-start; gap: 8px;
+    background: #3b82f610; border: 1px solid #3b82f630;
+    border-radius: 8px; padding: 10px 14px;
+    font-family: 'DM Sans', sans-serif; font-size: 12px; color: #93c5fd; line-height: 1.5;
+  }
+  .dp-webhook-warn-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+  .dp-webhook-warn strong { color: #bfdbfe; }
 
   /* ── Contact filters ── */
   .dp-filters {
