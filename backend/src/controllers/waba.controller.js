@@ -155,18 +155,22 @@ async function webhookStatus(req, res) {
 
     // Count contacts with wamid saved (sent in last 24h)
     const { rows: wamidRows } = await db.execute({
-      sql: `SELECT COUNT(*) as cnt FROM campaign_contacts cc
-            JOIN campaigns c ON c.id = cc.campaign_id
-            WHERE c.waba_id = ? AND cc.wamid IS NOT NULL AND cc.sent_at >= datetime('now','-24 hours')`,
+      sql: `SELECT COUNT(*) as cnt FROM campaign_contacts
+            JOIN campaigns ON campaigns.id = campaign_contacts.campaign_id
+            WHERE campaigns.waba_id = ?
+              AND campaign_contacts.wamid IS NOT NULL
+              AND campaign_contacts.sent_at >= datetime('now','-24 hours')`,
       args: [req.params.wabaId],
     })
     const wamidSavedLast24h = Number(wamidRows[0]?.cnt || 0)
 
     // Count contacts with delivered/read status (last 24h)
     const { rows: deliveredRows } = await db.execute({
-      sql: `SELECT COUNT(*) as cnt FROM campaign_contacts cc
-            JOIN campaigns c ON c.id = cc.campaign_id
-            WHERE c.waba_id = ? AND cc.status IN ('delivered','read') AND cc.delivered_at >= datetime('now','-24 hours')`,
+      sql: `SELECT COUNT(*) as cnt FROM campaign_contacts
+            JOIN campaigns ON campaigns.id = campaign_contacts.campaign_id
+            WHERE campaigns.waba_id = ?
+              AND campaign_contacts.status IN ('delivered','read')
+              AND campaign_contacts.delivered_at >= datetime('now','-24 hours')`,
       args: [req.params.wabaId],
     })
     const webhooksReceivedLast24h = Number(deliveredRows[0]?.cnt || 0)
@@ -229,10 +233,13 @@ async function webhookDebug(req, res) {
 
     // 4. Check last 10 sent contacts — do they have wamid?
     const { rows: sentRows } = await db.execute({
-      sql: `SELECT id, phone, status, wamid, sent_at FROM campaign_contacts cc
-            JOIN campaigns c ON c.id = cc.campaign_id
-            WHERE c.waba_id = ? AND cc.status IN ('sent','delivered','read','failed')
-            ORDER BY cc.sent_at DESC LIMIT 10`,
+      sql: `SELECT campaign_contacts.id, campaign_contacts.phone, campaign_contacts.status,
+                   campaign_contacts.wamid, campaign_contacts.sent_at
+            FROM campaign_contacts
+            JOIN campaigns ON campaigns.id = campaign_contacts.campaign_id
+            WHERE campaigns.waba_id = ?
+              AND campaign_contacts.status IN ('sent','delivered','read','failed')
+            ORDER BY campaign_contacts.sent_at DESC LIMIT 10`,
       args: [req.params.wabaId],
     })
     if (sentRows.length === 0) {
@@ -250,9 +257,10 @@ async function webhookDebug(req, res) {
 
     // 5. Check if any webhooks were ever received (any delivered/read status)
     const { rows: dlvRows } = await db.execute({
-      sql: `SELECT COUNT(*) as cnt FROM campaign_contacts cc
-            JOIN campaigns c ON c.id = cc.campaign_id
-            WHERE c.waba_id = ? AND cc.status IN ('delivered','read')`,
+      sql: `SELECT COUNT(*) as cnt FROM campaign_contacts
+            JOIN campaigns ON campaigns.id = campaign_contacts.campaign_id
+            WHERE campaigns.waba_id = ?
+              AND campaign_contacts.status IN ('delivered','read')`,
       args: [req.params.wabaId],
     })
     const total = Number(dlvRows[0]?.cnt || 0)
