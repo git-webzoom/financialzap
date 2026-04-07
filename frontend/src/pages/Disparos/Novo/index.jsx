@@ -178,7 +178,7 @@ export default function DisparosNovo() {
                 {/* WABA */}
                 <div className="wz-field">
                   <label className="wz-label">WABA</label>
-                  <select className="wz-select" value={draft.wabaId} onChange={e => setConfig({ wabaId: e.target.value, phoneNumberId: '' })}>
+                  <select className="wz-select" value={draft.wabaId} onChange={e => setConfig({ wabaId: e.target.value, phoneNumberId: '', templates: [], weights: [] })}>
                     <option value="">— selecione a WABA —</option>
                     {wabas.map(w => <option key={w.waba_id} value={w.waba_id}>{w.name || w.waba_id}</option>)}
                   </select>
@@ -249,11 +249,16 @@ export default function DisparosNovo() {
                 {/* Template selection */}
                 <div className="wz-field">
                   <label className="wz-label">Templates</label>
-                  {loadingTpls ? (
+                  {!draft.wabaId ? (
+                    <p className="wz-hint">Selecione uma WABA para ver os templates disponíveis.</p>
+                  ) : loadingTpls ? (
                     <p className="wz-hint">Carregando templates…</p>
                   ) : (
                     <SelecionarTemplates
-                      availableTemplates={allTemplates.filter(t => t.status?.toUpperCase() === 'APPROVED')}
+                      availableTemplates={allTemplates.filter(t =>
+                        t.status?.toUpperCase() === 'APPROVED' &&
+                        t.waba_id === draft.wabaId
+                      )}
                       selected={draft.templates}
                       splitMode={draft.splitMode}
                       weights={draft.weights}
