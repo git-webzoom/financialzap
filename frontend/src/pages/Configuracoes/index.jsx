@@ -456,18 +456,19 @@ function Spinner({ dark }) {
 function WebhookSection() {
   const [wabas,   setWabas]   = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadErr, setLoadErr] = useState(null)
   const [statuses, setStatuses] = useState({}) // wabaId → { loading, data, error }
 
   useEffect(() => {
     async function load() {
+      setLoadErr(null)
       try {
         const { groups } = await listWabas()
         const all = groups.flatMap(g => g.wabas)
         setWabas(all)
-        // Auto-check status for all WABAs
         all.forEach(w => checkStatus(w.waba_id))
-      } catch {
-        // ignore
+      } catch (err) {
+        setLoadErr(err.response?.data?.error || err.message || 'Erro ao carregar WABAs')
       } finally {
         setLoading(false)
       }
@@ -519,6 +520,7 @@ function WebhookSection() {
       </div>
 
       {/* Lista de WABAs */}
+      {loadErr && <div className="cfg-banner cfg-banner--err" style={{ margin: '12px 22px 0' }}>⚠ {loadErr}</div>}
       {loading ? (
         <div className="wh-loading"><span className="cfg-spinner" /> Carregando WABAs…</div>
       ) : wabas.length === 0 ? (
