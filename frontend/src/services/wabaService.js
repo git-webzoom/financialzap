@@ -39,3 +39,8 @@ export async function getWebhookStatus(wabaId) {
   const { data } = await api.get(`/api/wabas/${wabaId}/webhook-status`)
   return data // { subscribed, wamid_saved_last_24h, webhooks_received_last_24h }
 }
+
+export async function webhookDebug(wabaId) {
+  const { data } = await api.get(`/api/wabas/${wabaId}/webhook-debug`)
+  return data // { report: [{ ok, msg, data }] }
+}

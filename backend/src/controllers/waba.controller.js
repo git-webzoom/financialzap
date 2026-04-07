@@ -184,4 +184,89 @@ async function webhookStatus(req, res) {
   }
 }
 
-module.exports = { lookup, connect, list, revoke, phoneNumbers, sync, subscribeWebhook, webhookStatus }
+// GET /api/wabas/:wabaId/webhook-debug
+// Full diagnostic: tests subscription, wamid presence, and simulates a webhook lookup.
+// Returns a human-readable report of every step.
+async function webhookDebug(req, res) {
+  const report = []
+  const ok  = (msg, data) => report.push({ ok: true,  msg, data: data ?? undefined })
+  const err = (msg, data) => report.push({ ok: false, msg, data: data ?? undefined })
+
+  try {
+    const db = require('../db/database').getDb()
+
+    // 1. Fetch WABA from DB
+    const { rows } = await db.execute({
+      sql: 'SELECT waba_id, access_token_enc FROM wabas WHERE waba_id = ? AND user_id = ?',
+      args: [req.params.wabaId, req.user.sub],
+    })
+    if (!rows.length) return res.status(404).json({ error: 'WABA not found' })
+    ok('WABA encontrada no banco')
+
+    const token = wabaService.getDecryptedToken(rows[0])
+    ok('Token descriptografado com sucesso')
+
+    // 2. Check subscription via Meta API
+    try {
+      const subs = await metaService.getWebhookSubscriptions(req.params.wabaId, token)
+      const apps = subs?.data || []
+      if (apps.length > 0) {
+        ok(`WABA está inscrita no webhook — ${apps.length} app(s) inscrito(s)`, apps.map(a => a.whatsapp_business_api_data?.id || a.id))
+      } else {
+        err('WABA NÃO está inscrita no webhook — chame POST /:wabaId/subscribe-webhook', subs)
+      }
+    } catch (e) {
+      err('Falha ao verificar subscription: ' + (e.response?.data?.error?.message || e.message))
+    }
+
+    // 3. Try to subscribe now
+    try {
+      const subResult = await metaService.subscribeWebhook(req.params.wabaId, token)
+      ok('subscribeWebhook chamado com sucesso agora', subResult)
+    } catch (e) {
+      err('subscribeWebhook FALHOU: ' + (e.response?.data?.error?.message || e.message))
+    }
+
+    // 4. Check last 10 sent contacts — do they have wamid?
+    const { rows: sentRows } = await db.execute({
+      sql: `SELECT id, phone, status, wamid, sent_at FROM campaign_contacts cc
+            JOIN campaigns c ON c.id = cc.campaign_id
+            WHERE c.waba_id = ? AND cc.status IN ('sent','delivered','read','failed')
+            ORDER BY cc.sent_at DESC LIMIT 10`,
+      args: [req.params.wabaId],
+    })
+    if (sentRows.length === 0) {
+      err('Nenhum contato enviado encontrado para esta WABA')
+    } else {
+      const withWamid    = sentRows.filter(r => r.wamid)
+      const withoutWamid = sentRows.filter(r => !r.wamid)
+      if (withWamid.length > 0) {
+        ok(`${withWamid.length}/${sentRows.length} contatos recentes têm wamid salvo`, withWamid.map(r => ({ id: r.id, phone: r.phone, wamid: r.wamid, status: r.status })))
+      }
+      if (withoutWamid.length > 0) {
+        err(`${withoutWamid.length}/${sentRows.length} contatos recentes NÃO têm wamid — a Meta não retornou o ID na resposta de envio`, withoutWamid.map(r => ({ id: r.id, phone: r.phone, status: r.status })))
+      }
+    }
+
+    // 5. Check if any webhooks were ever received (any delivered/read status)
+    const { rows: dlvRows } = await db.execute({
+      sql: `SELECT COUNT(*) as cnt FROM campaign_contacts cc
+            JOIN campaigns c ON c.id = cc.campaign_id
+            WHERE c.waba_id = ? AND cc.status IN ('delivered','read')`,
+      args: [req.params.wabaId],
+    })
+    const total = Number(dlvRows[0]?.cnt || 0)
+    if (total > 0) {
+      ok(`${total} contato(s) já tiveram status delivered/read — webhooks estão chegando`)
+    } else {
+      err('Nenhum contato com status delivered/read — webhooks nunca chegaram ou wamid não está sendo salvo')
+    }
+
+    res.json({ report })
+  } catch (e) {
+    err('Erro interno: ' + e.message)
+    res.status(500).json({ report })
+  }
+}
+
+module.exports = { lookup, connect, list, revoke, phoneNumbers, sync, subscribeWebhook, webhookStatus, webhookDebug }

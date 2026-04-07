@@ -9,7 +9,7 @@
  */
 import { useEffect, useState, useCallback } from 'react'
 import { getMe, updateMe, listUsers, createUser, deleteUser } from '../../services/authService'
-import { listWabas, subscribeWebhook, getWebhookStatus } from '../../services/wabaService'
+import { listWabas, subscribeWebhook, getWebhookStatus, webhookDebug } from '../../services/wabaService'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -454,10 +454,11 @@ function Spinner({ dark }) {
 // ─── WebhookSection ───────────────────────────────────────────────────────────
 
 function WebhookSection() {
-  const [wabas,   setWabas]   = useState([])
-  const [loading, setLoading] = useState(true)
-  const [loadErr, setLoadErr] = useState(null)
-  const [statuses, setStatuses] = useState({}) // wabaId → { loading, data, error }
+  const [wabas,        setWabas]        = useState([])
+  const [loading,      setLoading]      = useState(true)
+  const [loadErr,      setLoadErr]      = useState(null)
+  const [statuses,     setStatuses]     = useState({}) // wabaId → { loading, data, error }
+  const [debugResults, setDebugResults] = useState({}) // wabaId → { loading, report, error }
 
   useEffect(() => {
     async function load() {
@@ -496,6 +497,16 @@ function WebhookSection() {
     }
   }
 
+  async function handleDebug(wabaId) {
+    setDebugResults(d => ({ ...d, [wabaId]: { loading: true, report: null, error: null } }))
+    try {
+      const result = await webhookDebug(wabaId)
+      setDebugResults(d => ({ ...d, [wabaId]: { loading: false, report: result.report, error: null } }))
+    } catch (err) {
+      setDebugResults(d => ({ ...d, [wabaId]: { loading: false, report: null, error: err.response?.data?.error || err.message } }))
+    }
+  }
+
   return (
     <div className="cfg-section">
       <div className="cfg-section-header">
@@ -512,11 +523,11 @@ function WebhookSection() {
         <ol className="wh-instr-steps">
           <li>Acesse <strong>developers.facebook.com</strong> → seu app → <strong>WhatsApp → Configuration</strong></li>
           <li>Em <strong>Webhook</strong>, clique em <strong>Edit</strong></li>
-          <li>Callback URL: <code>{window.location.origin.replace('localhost:5173', window.ENV_API_URL || 'seu-dominio') || ''}/api/webhook</code></li>
-          <li>Verify Token: o valor de <code>META_WEBHOOK_VERIFY_TOKEN</code> no .env do backend</li>
+          <li>Callback URL: <code>https://tg-financialzap-back.dogoq1.easypanel.host/api/webhook</code></li>
+          <li>Verify Token: valor de <code>META_WEBHOOK_VERIFY_TOKEN</code> no .env do backend</li>
           <li>Clique em <strong>Verify and Save</strong>, depois ative o campo <strong>messages</strong></li>
         </ol>
-        <p className="wh-instr-note">Após configurar, clique em <strong>Inscrever</strong> em cada WABA abaixo.</p>
+        <p className="wh-instr-note">Após configurar, clique em <strong>Inscrever</strong> em cada WABA abaixo. Use <strong>Diagnóstico</strong> para ver o que está falhando.</p>
       </div>
 
       {/* Lista de WABAs */}
@@ -528,46 +539,72 @@ function WebhookSection() {
       ) : (
         <div className="wh-list">
           {wabas.map(w => {
-            const st = statuses[w.waba_id]
+            const st  = statuses[w.waba_id]
+            const dbg = debugResults[w.waba_id]
             const subscribed = st?.data?.subscribed
-            const wamid = st?.data?.wamid_saved_last_24h ?? '—'
+            const wamid    = st?.data?.wamid_saved_last_24h    ?? '—'
             const received = st?.data?.webhooks_received_last_24h ?? '—'
 
             return (
-              <div key={w.waba_id} className="wh-row">
-                <div className="wh-row-left">
-                  <span className="wh-waba-name">{w.name || w.waba_id}</span>
-                  <span className="wh-waba-id">{w.waba_id}</span>
-                </div>
-
-                {st?.loading ? (
-                  <span className="cfg-spinner" />
-                ) : st?.error ? (
-                  <span className="wh-badge wh-badge--err" title={st.error}>Erro</span>
-                ) : st?.data ? (
-                  <div className="wh-row-stats">
-                    <span className={`wh-badge ${subscribed ? 'wh-badge--ok' : 'wh-badge--warn'}`}>
-                      {subscribed ? '✓ Inscrito' : '✗ Não inscrito'}
-                    </span>
-                    <span className="wh-stat" title="Mensagens com wamid salvo nas últimas 24h">
-                      <span className="wh-stat-val">{wamid}</span>
-                      <span className="wh-stat-lbl">enviados 24h</span>
-                    </span>
-                    <span className="wh-stat" title="Webhooks de entrega/leitura recebidos nas últimas 24h">
-                      <span className="wh-stat-val" style={received > 0 ? { color: '#22c55e' } : {}}>{received}</span>
-                      <span className="wh-stat-lbl">webhooks 24h</span>
-                    </span>
+              <div key={w.waba_id} className="wh-row-wrap">
+                <div className="wh-row">
+                  <div className="wh-row-left">
+                    <span className="wh-waba-name">{w.name || w.waba_id}</span>
+                    <span className="wh-waba-id">{w.waba_id}</span>
                   </div>
-                ) : null}
 
-                <div className="wh-row-actions">
-                  <button className="cfg-btn cfg-btn--ghost" onClick={() => checkStatus(w.waba_id)} disabled={st?.loading} title="Verificar status">
-                    ↺
-                  </button>
-                  <button className="cfg-btn cfg-btn--subscribe" onClick={() => handleSubscribe(w.waba_id)} disabled={st?.loading}>
-                    {st?.loading ? <span className="cfg-spinner cfg-spinner--dark" /> : 'Inscrever'}
-                  </button>
+                  {st?.loading ? (
+                    <span className="cfg-spinner" />
+                  ) : st?.error ? (
+                    <span className="wh-badge wh-badge--err" title={st.error}>Erro ao verificar</span>
+                  ) : st?.data ? (
+                    <div className="wh-row-stats">
+                      <span className={`wh-badge ${subscribed ? 'wh-badge--ok' : 'wh-badge--warn'}`}>
+                        {subscribed ? '✓ Inscrito' : '✗ Não inscrito'}
+                      </span>
+                      <span className="wh-stat" title="Mensagens com wamid salvo nas últimas 24h">
+                        <span className="wh-stat-val">{wamid}</span>
+                        <span className="wh-stat-lbl">enviados 24h</span>
+                      </span>
+                      <span className="wh-stat" title="Webhooks de entrega/leitura recebidos nas últimas 24h">
+                        <span className="wh-stat-val" style={received > 0 ? { color: '#22c55e' } : {}}>{received}</span>
+                        <span className="wh-stat-lbl">webhooks 24h</span>
+                      </span>
+                    </div>
+                  ) : null}
+
+                  <div className="wh-row-actions">
+                    <button className="cfg-btn cfg-btn--ghost" onClick={() => checkStatus(w.waba_id)} disabled={st?.loading} title="Atualizar status">
+                      ↺
+                    </button>
+                    <button className="cfg-btn cfg-btn--ghost" onClick={() => handleDebug(w.waba_id)} disabled={dbg?.loading} title="Diagnóstico completo">
+                      {dbg?.loading ? <span className="cfg-spinner" /> : '🔍 Diagnóstico'}
+                    </button>
+                    <button className="cfg-btn cfg-btn--subscribe" onClick={() => handleSubscribe(w.waba_id)} disabled={st?.loading}>
+                      {st?.loading ? <span className="cfg-spinner cfg-spinner--dark" /> : 'Inscrever'}
+                    </button>
+                  </div>
                 </div>
+
+                {/* Debug report */}
+                {dbg?.error && (
+                  <div className="wh-debug-report">
+                    <div className="wh-debug-item wh-debug-item--err">⚠ {dbg.error}</div>
+                  </div>
+                )}
+                {dbg?.report && (
+                  <div className="wh-debug-report">
+                    {dbg.report.map((item, i) => (
+                      <div key={i} className={`wh-debug-item ${item.ok ? 'wh-debug-item--ok' : 'wh-debug-item--err'}`}>
+                        <span className="wh-debug-icon">{item.ok ? '✓' : '✗'}</span>
+                        <span>{item.msg}</span>
+                        {item.data && (
+                          <pre className="wh-debug-data">{JSON.stringify(item.data, null, 2)}</pre>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )
           })}
@@ -898,9 +935,11 @@ const CSS = `
 
   .wh-list { display: flex; flex-direction: column; margin-top: 12px; }
 
+  .wh-row-wrap { border-top: 1px solid #1a1f28; }
+
   .wh-row {
     display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-    padding: 14px 22px; border-top: 1px solid #1a1f28;
+    padding: 14px 22px;
   }
   .wh-row-left { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
   .wh-waba-name {
@@ -954,6 +993,27 @@ const CSS = `
   }
   .cfg-btn--subscribe:hover:not(:disabled) { background: #3b82f625; }
   .cfg-btn--subscribe:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Debug report ── */
+  .wh-debug-report {
+    margin: 0 22px 14px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .wh-debug-item {
+    display: flex; flex-direction: column; gap: 4px;
+    padding: 8px 12px; border-radius: 7px;
+    font-family: 'DM Sans', sans-serif; font-size: 12px; line-height: 1.4;
+  }
+  .wh-debug-item--ok  { background: #22c55e10; border: 1px solid #22c55e25; color: #86efac; }
+  .wh-debug-item--err { background: #ef444410; border: 1px solid #ef444430; color: #fca5a5; }
+  .wh-debug-icon { font-weight: 700; margin-right: 4px; }
+  .wh-debug-data {
+    margin: 4px 0 0; padding: 6px 8px;
+    background: #0c0f13; border-radius: 5px;
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    color: #8a94a6; white-space: pre-wrap; word-break: break-all;
+    max-height: 120px; overflow-y: auto;
+  }
 
   @media (max-width: 700px) {
     .cfg-new-user-fields { grid-template-columns: 1fr; }

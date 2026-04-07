@@ -29,4 +29,7 @@ router.post('/:wabaId/subscribe-webhook', ctrl.subscribeWebhook)
 // Diagnostic: check if WABA is subscribed and if webhooks are arriving
 router.get('/:wabaId/webhook-status', ctrl.webhookStatus)
 
+// Full debug: subscription check + subscribe attempt + wamid check + delivered count
+router.get('/:wabaId/webhook-debug', ctrl.webhookDebug)
+
 module.exports = router
