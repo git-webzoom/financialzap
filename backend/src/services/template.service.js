@@ -285,18 +285,23 @@ async function deleteTemplate(userId, wabaId, templateId) {
   const token = wabaService.getDecryptedToken({ access_token_enc })
 
   // Delete on Meta (name + hsm_id required since Graph API v14+)
+  // If Meta rejects (banned BM, account disabled, not found), delete locally anyway —
+  // the template is unusable regardless of Meta's response.
   try {
     console.log('[deleteTemplate] Calling Meta — wabaId:', wabaId, 'name:', name, 'hsm_id:', templateId)
     await metaService.deleteTemplate(wabaId, token, name, templateId)
   } catch (err) {
     const metaErr = err.response?.data?.error
-    console.error('[deleteTemplate] Meta error:', JSON.stringify(metaErr || err.message))
-    // If Meta says it doesn't exist, proceed to delete locally anyway
-    const metaMsg = metaErr?.message || ''
-    const notFound = metaMsg.includes('does not exist') || metaMsg.includes('not found') || metaMsg.includes("wasn't found")
-    if (!notFound) {
-      throw new Error(`Meta API error: ${metaErr?.error_user_msg || metaMsg || err.message}`)
+    const metaMsg = metaErr?.message || err.message || ''
+    const errorCode = metaErr?.code
+    console.warn('[deleteTemplate] Meta error (deleting locally anyway):', JSON.stringify({ code: errorCode, message: metaMsg }))
+    // Only block local deletion if it's a transient/network error (5xx from Meta)
+    // For any account-level error (banned, disabled, permission, not found) — proceed locally
+    const isTransient = err.response?.status >= 500
+    if (isTransient) {
+      throw new Error(`Meta API indisponível — tente novamente em instantes`)
     }
+    // Otherwise: BM banida, conta desativada, template já removido, sem permissão — deleta localmente
   }
 
   // Delete locally
