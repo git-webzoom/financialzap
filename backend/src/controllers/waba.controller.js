@@ -157,7 +157,7 @@ async function health(req, res) {
         args: [
           p.status,
           p.account_mode,
-          p.health_status ? JSON.stringify(p.health_status) : null,
+          p.raw_health ? JSON.stringify(p.raw_health) : null,
           p.quality_rating,
           p.messaging_limit_tier,
           p.id,

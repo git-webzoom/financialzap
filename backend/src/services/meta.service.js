@@ -179,21 +179,41 @@ async function getWabaHealth(wabaId, accessToken) {
   })
 
   return {
-    waba_id:             wabaId,
-    waba_name:           wabaData.name,
-    account_review_status: wabaData.account_review_status ?? null, // APPROVED | REJECTED | PENDING
-    ban_state:           wabaData.ban_state    ?? null,             // DISABLE | SCHEDULE_FOR_DISABLE | null
-    decision:            wabaData.decision     ?? null,             // APPROVED | REJECTED
-    phone_numbers:       (phoneData.data || []).map(p => ({
-      id:                   p.id,
-      display_phone_number: p.display_phone_number,
-      verified_name:        p.verified_name,
-      quality_rating:       p.quality_rating,
-      messaging_limit_tier: p.messaging_limit_tier,
-      status:               p.status,        // CONNECTED | FLAGGED | RESTRICTED | RATE_LIMITED | WARNED | OFFLINE | UNKNOWN
-      account_mode:         p.account_mode ?? null,  // SANDBOX | LIVE
-      health_status:        p.health_status ?? null, // { can_send_message, entities: [{entity_type, id, can_send_message, errors}] }
-    })),
+    waba_id:               wabaId,
+    waba_name:             wabaData.name,
+    account_review_status: wabaData.account_review_status ?? null,
+    ban_state:             wabaData.ban_state    ?? null,
+    decision:              wabaData.decision     ?? null,
+    // Raw WABA data for full inspection
+    raw_waba:              wabaData,
+    phone_numbers: (phoneData.data || []).map(p => {
+      const hs = p.health_status ?? null
+      // Collect all errors from health_status entities
+      const healthErrors = []
+      for (const entity of hs?.entities || []) {
+        for (const err of entity.errors || []) {
+          healthErrors.push({
+            entity_type:       entity.entity_type,
+            can_send_message:  entity.can_send_message,
+            error_code:        err.error_code,
+            error_description: err.error_description,
+            possible_solution: err.possible_solution,
+          })
+        }
+      }
+      return {
+        id:                   p.id,
+        display_phone_number: p.display_phone_number,
+        verified_name:        p.verified_name,
+        quality_rating:       p.quality_rating,         // GREEN | YELLOW | RED | UNKNOWN
+        messaging_limit_tier: p.messaging_limit_tier,   // TIER_1..TIER_4 | TIER_UNLIMITED
+        status:               p.status,                 // CONNECTED | FLAGGED | RESTRICTED | RATE_LIMITED | WARNED | OFFLINE | UNKNOWN
+        account_mode:         p.account_mode ?? null,   // SANDBOX | LIVE
+        can_send_message:     hs?.can_send_message ?? null,
+        health_errors:        healthErrors,
+        raw_health:           hs,
+      }
+    }),
   }
 }
 

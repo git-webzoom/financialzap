@@ -76,8 +76,12 @@ export default function WabaCard({ waba, phoneNumbers = [], onRevoke, onSync }) 
       if (data.ban_state === 'SCHEDULE_FOR_DISABLE') problems.push('conta agendada para ban')
       if (data.decision === 'REJECTED') problems.push('conta rejeitada pela Meta')
       if (data.account_review_status === 'REJECTED') problems.push('revisão rejeitada')
-      const badPhones = data.phone_numbers?.filter(p => p.status && !['CONNECTED'].includes(p.status.toUpperCase()))
-      if (badPhones?.length) problems.push(`${badPhones.length} número(s) com problema: ${badPhones.map(p => p.status).join(', ')}`)
+      const badPhones = data.phone_numbers?.filter(p =>
+        (p.status && !['CONNECTED'].includes(p.status.toUpperCase())) ||
+        p.can_send_message === false ||
+        p.health_errors?.length > 0
+      )
+      if (badPhones?.length) problems.push(`${badPhones.length} número(s) com restrição`)
 
       if (problems.length) {
         setSyncMsg(`⚠ ${problems.join(' · ')}`)
@@ -188,14 +192,27 @@ export default function WabaCard({ waba, phoneNumbers = [], onRevoke, onSync }) 
         )}
 
         {/* Phone number restriction alerts */}
-        {(healthData?.phone_numbers || []).filter(p => p.status && p.status.toUpperCase() !== 'CONNECTED').map(p => (
-          <div key={p.id} className="wc-alert wc-alert--phone">
-            ⚠ Número <strong>{p.display_phone_number}</strong>: status <strong>{p.status}</strong>
-            {p.health_status?.entities?.[0]?.errors?.[0]?.error_description
-              ? ` — ${p.health_status.entities[0].errors[0].error_description}`
-              : ''}
-          </div>
-        ))}
+        {(healthData?.phone_numbers || [])
+          .filter(p =>
+            (p.status && p.status.toUpperCase() !== 'CONNECTED') ||
+            p.can_send_message === false ||
+            p.health_errors?.length > 0
+          )
+          .map(p => (
+            <div key={p.id} className="wc-alert wc-alert--phone">
+              <div>
+                ⚠ Número <strong>{p.display_phone_number}</strong>
+                {p.status && p.status.toUpperCase() !== 'CONNECTED' && <> — status: <strong>{p.status}</strong></>}
+                {p.can_send_message === false && <> — <strong>não pode enviar mensagens</strong></>}
+                {p.quality_rating && p.quality_rating !== 'GREEN' && <> — qualidade: <strong>{p.quality_rating}</strong></>}
+              </div>
+              {p.health_errors?.map((e, i) => (
+                <div key={i} style={{ marginTop: 4, fontSize: 11, color: '#fbbf24' }}>
+                  • {e.error_description}{e.possible_solution ? ` — ${e.possible_solution}` : ''}
+                </div>
+              ))}
+            </div>
+          ))}
 
         {/* Legacy alert banner (from waba.status field) */}
         {alert && !hasRestriction && (
