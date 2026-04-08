@@ -150,7 +150,7 @@ async function getWabasFromToken(accessToken) {
 async function getWabaInfo(wabaId, accessToken) {
   const { data } = await metaApi.get(`/${wabaId}`, {
     params: {
-      fields: 'id,name,currency,timezone_id,owner_business_info,account_review_status,ban_state,decision,message_template_namespace',
+      fields: 'id,name,currency,timezone_id,owner_business_info,account_review_status,message_template_namespace',
       access_token: accessToken,
     },
   })
