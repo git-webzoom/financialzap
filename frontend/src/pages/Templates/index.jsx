@@ -35,6 +35,21 @@ const CATEGORY_LABELS = {
   AUTHENTICATION: 'Autenticação',
 }
 
+function CategoryBadge({ category }) {
+  const label = CATEGORY_LABELS[category?.toUpperCase()] || category || '—'
+  const isUtility = category?.toUpperCase() === 'UTILITY'
+  if (isUtility) return <span style={{ color: '#8a94a6', fontSize: 13 }}>{label}</span>
+  return (
+    <span
+      className="tbl-badge"
+      style={{ color: '#f59e0b', background: '#f59e0b15', borderColor: '#f59e0b35' }}
+      title="Templates de Marketing e Autenticação têm custo por conversa mais alto e podem ter menor entregabilidade"
+    >
+      ⚠ {label}
+    </span>
+  )
+}
+
 const STATUS_CONFIG = {
   APPROVED: { label: 'Ativo — Qualidade p…', color: '#22c55e', bg: '#22c55e18', border: '#22c55e35' },
   PENDING:  { label: 'Pendente',             color: '#f59e0b', bg: '#f59e0b18', border: '#f59e0b35' },
@@ -469,7 +484,7 @@ export default function Templates() {
                           </span>
                         )}
                       </td>
-                      <td className="tbl-td">{CATEGORY_LABELS[t.category] || t.category || '—'}</td>
+                      <td className="tbl-td"><CategoryBadge category={t.category} /></td>
                       <td className="tbl-td">{t.language || '—'}</td>
                       <td className="tbl-td"><StatusBadge status={t.status} /></td>
                       <td className="tbl-td">
