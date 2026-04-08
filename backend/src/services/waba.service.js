@@ -139,6 +139,7 @@ async function listWabasByUser(userId) {
       SELECT w.id, w.waba_id, w.name, w.business_id, w.business_name,
              w.currency, w.timezone, w.status, w.created_at,
              w.access_token_enc,
+             w.account_review_status, w.ban_state, w.decision,
              (SELECT COUNT(*) FROM phone_numbers p WHERE p.waba_id = w.waba_id) AS phone_count,
              (SELECT COUNT(*) FROM templates t WHERE t.waba_id = w.waba_id)     AS template_count
       FROM wabas w
@@ -174,15 +175,18 @@ async function listWabasByUser(userId) {
       }
     }
     byBusiness[key].wabas.push({
-      id:             row.id,
-      waba_id:        row.waba_id,
-      name:           row.name,
-      currency:       row.currency,
-      timezone:       row.timezone,
-      status:         row.status,
-      created_at:     row.created_at,
-      phone_count:    Number(row.phone_count),
-      template_count: Number(row.template_count),
+      id:                    row.id,
+      waba_id:               row.waba_id,
+      name:                  row.name,
+      currency:              row.currency,
+      timezone:              row.timezone,
+      status:                row.status,
+      created_at:            row.created_at,
+      phone_count:           Number(row.phone_count),
+      template_count:        Number(row.template_count),
+      account_review_status: row.account_review_status ?? null,
+      ban_state:             row.ban_state             ?? null,
+      decision:              row.decision              ?? null,
     })
   }
 

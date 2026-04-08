@@ -34,6 +34,15 @@ async function migrate() {
   await addColumnIfMissing(db, 'campaign_contacts',  'media_url',       'TEXT')
   await addColumnIfMissing(db, 'campaigns',          'read_count',      'INTEGER DEFAULT 0')
 
+  // WABA health/restriction fields (synced from Meta API)
+  await addColumnIfMissing(db, 'wabas', 'account_review_status', 'TEXT')
+  await addColumnIfMissing(db, 'wabas', 'ban_state',             'TEXT')
+  await addColumnIfMissing(db, 'wabas', 'decision',              'TEXT')
+
+  // Phone number health fields
+  await addColumnIfMissing(db, 'phone_numbers', 'account_mode',   'TEXT')
+  await addColumnIfMissing(db, 'phone_numbers', 'health_status',  'TEXT')
+
   // Índice para lookup de wamid no webhook (idempotente via IF NOT EXISTS)
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_campaign_contacts_wamid ON campaign_contacts(wamid)`)
 

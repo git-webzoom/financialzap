@@ -130,6 +130,49 @@ async function subscribeWebhook(req, res) {
   }
 }
 
+// GET /api/wabas/:wabaId/health
+// Fetch live restriction/health status from Meta for this WABA and its phone numbers.
+async function health(req, res) {
+  try {
+    const db = require('../db/database').getDb()
+    const { rows } = await db.execute({
+      sql: 'SELECT waba_id, access_token_enc FROM wabas WHERE waba_id = ? AND user_id = ?',
+      args: [req.params.wabaId, req.user.sub],
+    })
+    if (!rows.length) return res.status(404).json({ error: 'WABA not found' })
+
+    const token = wabaService.getDecryptedToken(rows[0])
+    const data  = await metaService.getWabaHealth(req.params.wabaId, token)
+
+    // Persist restriction fields to DB so they show without a live API call
+    await db.execute({
+      sql: `UPDATE wabas SET account_review_status = ?, ban_state = ?, decision = ? WHERE waba_id = ?`,
+      args: [data.account_review_status, data.ban_state, data.decision, req.params.wabaId],
+    })
+
+    // Persist phone number health fields
+    for (const p of data.phone_numbers) {
+      await db.execute({
+        sql: `UPDATE phone_numbers SET status = ?, account_mode = ?, health_status = ?, quality_rating = ?, messaging_limit_tier = ?, updated_at = CURRENT_TIMESTAMP WHERE phone_number_id = ?`,
+        args: [
+          p.status,
+          p.account_mode,
+          p.health_status ? JSON.stringify(p.health_status) : null,
+          p.quality_rating,
+          p.messaging_limit_tier,
+          p.id,
+        ],
+      })
+    }
+
+    res.json(data)
+  } catch (err) {
+    const msg = err.response?.data?.error?.message || err.message
+    console.error('[health] Error:', msg)
+    res.status(err.response?.status || 500).json({ error: msg })
+  }
+}
+
 // GET /api/wabas/:wabaId/webhook-status
 // Returns diagnostic info: whether the WABA is subscribed and recent delivery activity.
 async function webhookStatus(req, res) {
@@ -277,4 +320,4 @@ async function webhookDebug(req, res) {
   }
 }
 
-module.exports = { lookup, connect, list, revoke, phoneNumbers, sync, subscribeWebhook, webhookStatus, webhookDebug }
+module.exports = { lookup, connect, list, revoke, phoneNumbers, sync, health, subscribeWebhook, webhookStatus, webhookDebug }

@@ -150,11 +150,51 @@ async function getWabasFromToken(accessToken) {
 async function getWabaInfo(wabaId, accessToken) {
   const { data } = await metaApi.get(`/${wabaId}`, {
     params: {
-      fields: 'id,name,currency,timezone_id,owner_business_info',
+      fields: 'id,name,currency,timezone_id,owner_business_info,account_review_status,ban_state,decision,message_template_namespace',
       access_token: accessToken,
     },
   })
   return data
+}
+
+/**
+ * Fetch health/restriction status directly from Meta for a WABA and its phone numbers.
+ * Returns: { waba_review_status, waba_ban_state, waba_decision, phone_numbers: [...] }
+ */
+async function getWabaHealth(wabaId, accessToken) {
+  // WABA-level restriction fields
+  const { data: wabaData } = await metaApi.get(`/${wabaId}`, {
+    params: {
+      fields: 'id,name,account_review_status,ban_state,decision,on_behalf_of_business_info',
+      access_token: accessToken,
+    },
+  })
+
+  // Phone-number-level status (includes health_status, account_mode)
+  const { data: phoneData } = await metaApi.get(`/${wabaId}/phone_numbers`, {
+    params: {
+      fields: 'id,display_phone_number,verified_name,quality_rating,messaging_limit_tier,status,account_mode,health_status',
+      access_token: accessToken,
+    },
+  })
+
+  return {
+    waba_id:             wabaId,
+    waba_name:           wabaData.name,
+    account_review_status: wabaData.account_review_status ?? null, // APPROVED | REJECTED | PENDING
+    ban_state:           wabaData.ban_state    ?? null,             // DISABLE | SCHEDULE_FOR_DISABLE | null
+    decision:            wabaData.decision     ?? null,             // APPROVED | REJECTED
+    phone_numbers:       (phoneData.data || []).map(p => ({
+      id:                   p.id,
+      display_phone_number: p.display_phone_number,
+      verified_name:        p.verified_name,
+      quality_rating:       p.quality_rating,
+      messaging_limit_tier: p.messaging_limit_tier,
+      status:               p.status,        // CONNECTED | FLAGGED | RESTRICTED | RATE_LIMITED | WARNED | OFFLINE | UNKNOWN
+      account_mode:         p.account_mode ?? null,  // SANDBOX | LIVE
+      health_status:        p.health_status ?? null, // { can_send_message, entities: [{entity_type, id, can_send_message, errors}] }
+    })),
+  }
 }
 
 // ─── Phone numbers ────────────────────────────────────────────────────────────
@@ -277,6 +317,7 @@ async function getWebhookSubscriptions(wabaId, accessToken) {
 module.exports = {
   getWabasFromToken,
   getWabaInfo,
+  getWabaHealth,
   getPhoneNumbers,
   getPhoneNumberInfo,
   getTemplates,

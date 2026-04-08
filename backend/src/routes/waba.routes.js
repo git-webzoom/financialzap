@@ -23,6 +23,9 @@ router.get('/:wabaId/phone-numbers', ctrl.phoneNumbers)
 // Manually re-sync phone numbers + templates for a WABA
 router.post('/:wabaId/sync', ctrl.sync)
 
+// Fetch live health/restriction status from Meta (WABA + phone numbers)
+router.get('/:wabaId/health', ctrl.health)
+
 // Subscribe to Meta webhook events for a WABA (required for delivered/read/failed)
 router.post('/:wabaId/subscribe-webhook', ctrl.subscribeWebhook)
 

@@ -44,3 +44,8 @@ export async function webhookDebug(wabaId) {
   const { data } = await api.get(`/api/wabas/${wabaId}/webhook-debug`)
   return data // { report: [{ ok, msg, data }] }
 }
+
+export async function getWabaHealth(wabaId) {
+  const { data } = await api.get(`/api/wabas/${wabaId}/health`)
+  return data // { waba_id, account_review_status, ban_state, decision, phone_numbers: [...] }
+}

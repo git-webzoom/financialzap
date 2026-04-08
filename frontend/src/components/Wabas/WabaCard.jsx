@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import NumeroItem from './NumeroItem'
-import { subscribeWebhook } from '../../services/wabaService'
+import { subscribeWebhook, getWabaHealth } from '../../services/wabaService'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -37,9 +37,19 @@ export default function WabaCard({ waba, phoneNumbers = [], onRevoke, onSync }) 
   const [revoking, setRevoking]       = useState(false)
   const [subscribing, setSubscribing] = useState(false)
   const [syncMsg, setSyncMsg]         = useState('')
+  const [healthData, setHealthData]   = useState(null)
+  const [healthLoading, setHealthLoading] = useState(false)
 
   const alert  = isWabaAlert(waba.status)
   const sColor = wabaStatusColor(waba.status)
+
+  // Derive restriction alerts from health data or from waba fields persisted in DB
+  const banState           = healthData?.ban_state            ?? waba.ban_state
+  const reviewStatus       = healthData?.account_review_status ?? waba.account_review_status
+  const decision           = healthData?.decision              ?? waba.decision
+  const isBanned           = banState === 'DISABLE' || banState === 'SCHEDULE_FOR_DISABLE'
+  const isRejected         = decision === 'REJECTED' || reviewStatus === 'REJECTED'
+  const hasRestriction     = isBanned || isRejected
 
   async function handleSync() {
     setSyncing(true)
@@ -52,6 +62,33 @@ export default function WabaCard({ waba, phoneNumbers = [], onRevoke, onSync }) 
       setSyncMsg(`⚠ ${err.response?.data?.error || err.message}`)
     } finally {
       setSyncing(false)
+    }
+  }
+
+  async function handleHealth() {
+    setHealthLoading(true)
+    setSyncMsg('')
+    try {
+      const data = await getWabaHealth(waba.waba_id)
+      setHealthData(data)
+      const problems = []
+      if (data.ban_state === 'DISABLE') problems.push('conta banida')
+      if (data.ban_state === 'SCHEDULE_FOR_DISABLE') problems.push('conta agendada para ban')
+      if (data.decision === 'REJECTED') problems.push('conta rejeitada pela Meta')
+      if (data.account_review_status === 'REJECTED') problems.push('revisão rejeitada')
+      const badPhones = data.phone_numbers?.filter(p => p.status && !['CONNECTED'].includes(p.status.toUpperCase()))
+      if (badPhones?.length) problems.push(`${badPhones.length} número(s) com problema: ${badPhones.map(p => p.status).join(', ')}`)
+
+      if (problems.length) {
+        setSyncMsg(`⚠ ${problems.join(' · ')}`)
+      } else {
+        setSyncMsg('✓ WABA e números sem restrições')
+        setTimeout(() => setSyncMsg(''), 4000)
+      }
+    } catch (err) {
+      setSyncMsg(`⚠ Health: ${err.response?.data?.error || err.message}`)
+    } finally {
+      setHealthLoading(false)
     }
   }
 
@@ -83,7 +120,7 @@ export default function WabaCard({ waba, phoneNumbers = [], onRevoke, onSync }) 
   return (
     <>
       <style>{CSS}</style>
-      <div className={`wc-root${alert ? ' wc-root--alert' : ''}`}>
+      <div className={`wc-root${alert || hasRestriction ? ' wc-root--alert' : ''}`}>
 
         {/* ── Header ── */}
         <div className="wc-header">
@@ -126,10 +163,13 @@ export default function WabaCard({ waba, phoneNumbers = [], onRevoke, onSync }) 
           </div>
 
           <div className="wc-actions">
-            <button className="wc-action-btn" onClick={handleSync} disabled={syncing || revoking || subscribing} title="Sincronizar números e templates">
+            <button className="wc-action-btn" onClick={handleSync} disabled={syncing || revoking || subscribing || healthLoading} title="Sincronizar números e templates">
               <span className={syncing ? 'wc-spin' : ''}><IconRefresh /></span>
             </button>
-            <button className="wc-action-btn wc-action-btn--webhook" onClick={handleSubscribeWebhook} disabled={subscribing || syncing || revoking} title="Inscrever webhook — clique para ativar notificações de entrega/leitura. Certifique-se também de configurar a Callback URL no Meta App Dashboard → WhatsApp → Configuration">
+            <button className="wc-action-btn wc-action-btn--health" onClick={handleHealth} disabled={healthLoading || syncing || revoking} title="Verificar status e restrições da conta na Meta">
+              <span className={healthLoading ? 'wc-spin' : ''}><IconHealth /></span>
+            </button>
+            <button className="wc-action-btn wc-action-btn--webhook" onClick={handleSubscribeWebhook} disabled={subscribing || syncing || revoking} title="Inscrever webhook — clique para ativar notificações de entrega/leitura">
               <span className={subscribing ? 'wc-spin' : ''}><IconWebhook /></span>
             </button>
             <button className="wc-action-btn wc-action-btn--danger" onClick={handleRevoke} disabled={revoking || syncing || subscribing} title="Desconectar WABA">
@@ -138,8 +178,27 @@ export default function WabaCard({ waba, phoneNumbers = [], onRevoke, onSync }) 
           </div>
         </div>
 
-        {/* Alert banner */}
-        {alert && (
+        {/* Restriction alerts from health check */}
+        {hasRestriction && (
+          <div className="wc-alert wc-alert--ban">
+            ⛔ {banState === 'DISABLE' ? 'Conta BANIDA pela Meta' : banState === 'SCHEDULE_FOR_DISABLE' ? 'Conta agendada para banimento' : ''}
+            {isRejected && !isBanned ? 'Conta REJEITADA pela Meta' : ''}
+            {' '}— Acesse o Business Manager para mais detalhes e contestar a decisão.
+          </div>
+        )}
+
+        {/* Phone number restriction alerts */}
+        {(healthData?.phone_numbers || []).filter(p => p.status && p.status.toUpperCase() !== 'CONNECTED').map(p => (
+          <div key={p.id} className="wc-alert wc-alert--phone">
+            ⚠ Número <strong>{p.display_phone_number}</strong>: status <strong>{p.status}</strong>
+            {p.health_status?.entities?.[0]?.errors?.[0]?.error_description
+              ? ` — ${p.health_status.entities[0].errors[0].error_description}`
+              : ''}
+          </div>
+        ))}
+
+        {/* Legacy alert banner (from waba.status field) */}
+        {alert && !hasRestriction && (
           <div className="wc-alert">
             ⚠ WABA com restrições ({waba.status}) — verifique o Business Manager para mais detalhes
           </div>
@@ -211,6 +270,14 @@ function IconRefresh() {
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <path d="M2.5 8A5.5 5.5 0 0113 4.5M13.5 8A5.5 5.5 0 013 11.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
       <path d="M11 2.5l2 2-2 2M5 13.5l-2-2 2-2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+}
+
+function IconHealth() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M3 10h3l2-6 4 12 2-6h3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   )
 }
@@ -349,6 +416,11 @@ const CSS = `
     border-color: #374151;
     background: #252c38;
   }
+  .wc-action-btn--health:hover:not(:disabled) {
+    color: #a78bfa;
+    border-color: #a78bfa40;
+    background: #a78bfa15;
+  }
   .wc-action-btn--webhook:hover:not(:disabled) {
     color: #3b82f6;
     border-color: #3b82f640;
@@ -381,6 +453,17 @@ const CSS = `
     font-size: 12px;
     color: #fca5a5;
     font-family: 'DM Sans', sans-serif;
+  }
+  .wc-alert--ban {
+    background: #ef444420;
+    border-color: #ef444450;
+    color: #fca5a5;
+    font-weight: 600;
+  }
+  .wc-alert--phone {
+    background: #f59e0b12;
+    border-color: #f59e0b30;
+    color: #fcd34d;
   }
 
   .wc-syncmsg {
