@@ -206,6 +206,21 @@ async function revokeWaba(userId, wabaId) {
     err.status = 404
     throw err
   }
+
+  // campaigns has ON DELETE RESTRICT for waba_id — must delete manually in order
+  // 1. Delete campaign_contacts for all campaigns of this WABA
+  await db.execute({
+    sql: `DELETE FROM campaign_contacts WHERE campaign_id IN (
+            SELECT id FROM campaigns WHERE waba_id = ?
+          )`,
+    args: [wabaId],
+  })
+  // 2. Delete campaigns of this WABA
+  await db.execute({
+    sql: 'DELETE FROM campaigns WHERE waba_id = ?',
+    args: [wabaId],
+  })
+  // 3. Delete the WABA — cascades to templates and phone_numbers automatically
   await db.execute({
     sql: 'DELETE FROM wabas WHERE waba_id = ? AND user_id = ?',
     args: [wabaId, userId],
