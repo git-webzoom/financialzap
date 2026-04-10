@@ -43,9 +43,16 @@ const CONTACT_STATUS_COLOR = {
   cancelled: '#6b7280',
 }
 
+function parseUTC(iso) {
+  if (!iso) return null
+  // SQLite returns dates without 'Z' — append it so JS parses as UTC, not local time
+  const s = iso.trim()
+  return new Date(s.endsWith('Z') || s.includes('+') ? s : s.replace(' ', 'T') + 'Z')
+}
+
 function fmtDate(iso) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('pt-BR', {
+  return parseUTC(iso).toLocaleString('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
     timeZone: 'America/Sao_Paulo',
@@ -66,7 +73,7 @@ function exportContactsCSV(contacts, campaignName) {
     c.phone,
     c.template_id,
     c.status,
-    c.sent_at ? new Date(c.sent_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '',
+    c.sent_at ? parseUTC(c.sent_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '',
     c.error_message || '',
   ])
   const csv = [headers, ...rows]
