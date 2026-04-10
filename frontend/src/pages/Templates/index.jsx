@@ -798,31 +798,27 @@ function TestModal({ template: t, wabas, onClose, onSend }) {
   const [sending,      setSending]      = useState(false)
   const [result,       setResult]       = useState(null)   // { ok, error }
 
-  // Load all phone numbers from all WABAs on mount
+  // Load phone numbers only from the template's WABA
   useEffect(() => {
     let cancelled = false
     async function load() {
       setLoadingPhones(true)
-      const all = []
-      for (const w of wabas) {
-        try {
-          const { phone_numbers } = await wabaService.getPhoneNumbers(w.waba_id)
-          for (const p of (phone_numbers || [])) {
-            all.push({ ...p, waba_id: w.waba_id, waba_name: w.name || w.waba_id })
-          }
-        } catch {
-          // skip failed waba
+      try {
+        const { phone_numbers } = await wabaService.getPhoneNumbers(t.waba_id)
+        const all = (phone_numbers || []).map(p => ({ ...p, waba_id: t.waba_id }))
+        if (!cancelled) {
+          setPhones(all)
+          if (all.length > 0) setPhoneNumId(all[0].phone_number_id)
         }
-      }
-      if (!cancelled) {
-        setPhones(all)
-        if (all.length > 0) setPhoneNumId(all[0].phone_number_id)
-        setLoadingPhones(false)
+      } catch {
+        // ignore
+      } finally {
+        if (!cancelled) setLoadingPhones(false)
       }
     }
     load()
     return () => { cancelled = true }
-  }, [wabas])
+  }, [t.waba_id])
 
   function handleVar(idx, value) {
     setVariables(prev => ({ ...prev, [String(idx)]: value }))
