@@ -48,6 +48,7 @@ function fmtDate(iso) {
   return new Date(iso).toLocaleString('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit',
+    timeZone: 'America/Sao_Paulo',
   })
 }
 
@@ -65,7 +66,7 @@ function exportContactsCSV(contacts, campaignName) {
     c.phone,
     c.template_id,
     c.status,
-    c.sent_at ? new Date(c.sent_at).toLocaleString('pt-BR') : '',
+    c.sent_at ? new Date(c.sent_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '',
     c.error_message || '',
   ])
   const csv = [headers, ...rows]
