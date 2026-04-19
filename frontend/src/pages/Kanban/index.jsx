@@ -6,6 +6,7 @@ import {
   useSensors,
   DragOverlay,
   closestCorners,
+  useDroppable,
 } from '@dnd-kit/core'
 import {
   SortableContext,
@@ -84,6 +85,9 @@ function KanbanColumn({ column, cards, onAddCard, onEditCard, onDeleteCard, onDe
   const [title, setTitle]     = useState(column.title)
   const inputRef = useRef(null)
 
+  // Register this column as a droppable zone so cards can be dropped into it
+  const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `col-${column.id}` })
+
   useEffect(() => { if (editing) inputRef.current?.focus() }, [editing])
 
   function handleRename() {
@@ -125,7 +129,11 @@ function KanbanColumn({ column, cards, onAddCard, onEditCard, onDeleteCard, onDe
       </div>
 
       <SortableContext items={cards.map(c => `card-${c.id}`)} strategy={verticalListSortingStrategy}>
-        <div className="kb-col-cards">
+        <div
+          ref={setDropRef}
+          className="kb-col-cards"
+          style={{ background: isOver ? '#22c55e08' : undefined }}
+        >
           {cards.map(card => (
             <KanbanCard
               key={card.id}
@@ -286,20 +294,26 @@ export default function Kanban() {
 
   function handleDragEnd({ active, over }) {
     setActiveId(null)
-    if (!over || active.id === over.id) return
+    if (!over) return
 
-    const cardId = Number(String(active.id).replace('card-', ''))
+    const cardId   = Number(String(active.id).replace('card-', ''))
+    const overId   = String(over.id)
 
-    // Determine destination column and position
-    if (String(over.id).startsWith('card-')) {
-      const overCardId = Number(String(over.id).replace('card-', ''))
-      const overCard   = cards.find(c => c.id === overCardId)
+    if (overId.startsWith('col-')) {
+      // Dropped directly on the column droppable zone
+      const colId    = Number(overId.replace('col-', ''))
+      const colCards = cardsForColumn(colId)
+      const dragging = cards.find(c => c.id === cardId)
+      // Skip if same column and already last
+      if (dragging && dragging.column_id === colId && colCards.length <= 1) return
+      moveCard(cardId, colId, colCards.length)
+    } else if (overId.startsWith('card-')) {
+      // Dropped on top of another card
+      const overCardId = Number(overId.replace('card-', ''))
+      if (cardId === overCardId) return
+      const overCard = cards.find(c => c.id === overCardId)
       if (!overCard) return
       moveCard(cardId, overCard.column_id, overCard.position)
-    } else if (String(over.id).startsWith('col-')) {
-      const colId    = Number(String(over.id).replace('col-', ''))
-      const colCards = cardsForColumn(colId)
-      moveCard(cardId, colId, colCards.length)
     }
   }
 

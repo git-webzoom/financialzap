@@ -92,9 +92,14 @@ const EMPTY_FORM = {
   waba_name: '', status: 'free', notes: '',
 }
 
-function NumberModal({ initial, onSave, onClose }) {
-  const [form, setForm]     = useState(initial ? { ...initial } : { ...EMPTY_FORM })
-  const [saving, setSaving] = useState(false)
+function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
+  const [form, setForm]         = useState(initial ? { ...initial } : { ...EMPTY_FORM })
+  const [saving, setSaving]     = useState(false)
+  const [automations, setAutos] = useState(initial?.automations ?? [])
+  const [showAddAuto, setShowAdd] = useState(false)
+  const [editingAuto, setEditingAuto] = useState(null)
+
+  const isEdit = !!initial
 
   function field(key) {
     return (e) => setForm(f => ({ ...f, [key]: e.target.value }))
@@ -111,6 +116,30 @@ function NumberModal({ initial, onSave, onClose }) {
     } finally {
       setSaving(false)
     }
+  }
+
+  async function handleCreateAuto(autoForm) {
+    const auto = await inventoryService.createAutomation(initial.id, autoForm)
+    const updated = [...automations, auto]
+    setAutos(updated)
+    onNumberUpdated?.({ ...initial, automations: updated })
+    setShowAdd(false)
+  }
+
+  async function handleUpdateAuto(autoId, autoForm) {
+    const auto = await inventoryService.updateAutomation(initial.id, autoId, autoForm)
+    const updated = automations.map(a => a.id === autoId ? auto : a)
+    setAutos(updated)
+    onNumberUpdated?.({ ...initial, automations: updated })
+    setEditingAuto(null)
+  }
+
+  async function handleDeleteAuto(autoId) {
+    if (!window.confirm('Remover esta automação?')) return
+    await inventoryService.deleteAutomation(initial.id, autoId)
+    const updated = automations.filter(a => a.id !== autoId)
+    setAutos(updated)
+    onNumberUpdated?.({ ...initial, automations: updated })
   }
 
   return (
@@ -160,6 +189,64 @@ function NumberModal({ initial, onSave, onClose }) {
             <label>Observações</label>
             <textarea value={form.notes || ''} onChange={field('notes')} rows={3} placeholder="Notas livres..." />
           </div>
+
+          {/* Automations section — only in edit mode */}
+          {isEdit && (
+            <div className="inv-auto-section">
+              <div className="inv-auto-section-header">
+                <span>Automações ({automations.length})</span>
+                {!showAddAuto && (
+                  <button type="button" className="inv-btn inv-btn--ghost inv-btn--sm" onClick={() => setShowAdd(true)}>
+                    <IconPlus /> Adicionar
+                  </button>
+                )}
+              </div>
+
+              {showAddAuto && (
+                <AutoForm onSave={handleCreateAuto} onCancel={() => setShowAdd(false)} />
+              )}
+
+              {automations.length === 0 && !showAddAuto && (
+                <div className="inv-empty-autos">Nenhuma automação registrada.</div>
+              )}
+
+              {automations.length > 0 && (
+                <table className="auto-table">
+                  <thead>
+                    <tr>
+                      <th>Automação</th>
+                      <th>Template</th>
+                      <th>Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {automations.map(a => (
+                      <>
+                        <tr key={a.id} className="auto-row">
+                          <td className="auto-td">{a.automation_name}</td>
+                          <td className="auto-td auto-mono">{a.template_name || <span className="inv-dash">—</span>}</td>
+                          <td className="auto-td">
+                            <div className="inv-actions">
+                              <button type="button" className="inv-icon-btn" onClick={() => setEditingAuto(editingAuto === a.id ? null : a.id)} title="Editar"><IconEdit /></button>
+                              <button type="button" className="inv-icon-btn inv-icon-btn--danger" onClick={() => handleDeleteAuto(a.id)} title="Remover"><IconTrash /></button>
+                            </div>
+                          </td>
+                        </tr>
+                        {editingAuto === a.id && (
+                          <tr key={`edit-${a.id}`}>
+                            <td colSpan={3} className="auto-td-form">
+                              <AutoForm initial={a} onSave={(f) => handleUpdateAuto(a.id, f)} onCancel={() => setEditingAuto(null)} />
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+
           <div className="inv-modal-footer">
             <button type="button" className="inv-btn inv-btn--ghost" onClick={onClose}>Cancelar</button>
             <button type="submit" className="inv-btn inv-btn--primary" disabled={saving}>
@@ -535,6 +622,7 @@ export default function Inventario() {
           initial={editModal === 'new' ? null : editModal}
           onSave={editModal === 'new' ? handleCreate : handleEdit}
           onClose={() => setEditModal(null)}
+          onNumberUpdated={handleNumberUpdated}
         />
       )}
 
@@ -767,6 +855,23 @@ const CSS_STR = `
     border-top: 1px solid #1a2030;
     margin-top: 4px;
     padding-bottom: 2px;
+  }
+
+  /* Automations section inside modal */
+  .inv-auto-section {
+    border-top: 1px solid #1a2030;
+    padding-top: 14px;
+  }
+  .inv-auto-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: #8a94a6;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 10px;
   }
 
   /* ── Detail drawer ── */

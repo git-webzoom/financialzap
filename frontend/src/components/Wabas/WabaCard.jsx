@@ -32,7 +32,7 @@ function isWabaAlert(status) {
  *   onSync(wabaId)   — callback to sync
  */
 export default function WabaCard({ waba, phoneNumbers = [], onRevoke, onSync }) {
-  const [expanded, setExpanded]       = useState(true)
+  const [expanded, setExpanded]       = useState(false)
   const [syncing, setSyncing]         = useState(false)
   const [revoking, setRevoking]       = useState(false)
   const [subscribing, setSubscribing] = useState(false)
