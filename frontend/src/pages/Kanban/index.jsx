@@ -920,6 +920,7 @@ const CSS_STR = `
     border-radius: 12px;
     display: flex;
     flex-direction: column;
+    align-self: flex-start;
     max-height: calc(100vh - 160px);
   }
   .kb-col--dragging { opacity: 0.5; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
@@ -1001,12 +1002,14 @@ const CSS_STR = `
   .kb-col-meta-actions { display: flex; gap: 4px; flex-shrink: 0; }
 
   .kb-col-cards {
+    flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 10px 10px 4px;
     display: flex;
     flex-direction: column;
     gap: 8px;
+    min-height: 0;
   }
 
   .kb-card {
