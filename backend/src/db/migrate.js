@@ -83,8 +83,8 @@ async function migrate() {
   // Melhoria 3 — volume diário por automação
   await addColumnIfMissing(db, 'number_automations', 'daily_volume', 'INTEGER DEFAULT 0')
 
-  // Melhoria 4 — moved_at nos cards do Kanban
-  await addColumnIfMissing(db, 'bm_cards', 'moved_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP')
+  // Melhoria 4 — moved_at nos cards do Kanban (NULL = nunca movido; usamos updated_at como fallback no front)
+  await addColumnIfMissing(db, 'bm_cards', 'moved_at', 'DATETIME')
 
   console.log('[db] Migration complete.')
 }
