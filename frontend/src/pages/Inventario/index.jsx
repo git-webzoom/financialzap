@@ -147,7 +147,7 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
   const [automations, setAutos] = useState(initial?.automations ?? [])
   const [showAddAuto, setShowAdd] = useState(false)
   const [editingAuto, setEditingAuto] = useState(null)
-  const autoSectionRef = useRef(null)
+  const modalRef = useRef(null)
 
   // The "effective" number for automation calls (either the passed `initial` or the just-created one)
   const effectiveNumber = createdNumber ?? initial
@@ -166,8 +166,8 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
         // Creation — stay open, show automations section
         setCreatedNumber(saved)
         setAutos(saved.automations ?? [])
-        // Scroll to automations section after render
-        setTimeout(() => autoSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+        // Scroll modal to bottom to reveal automations section
+        setTimeout(() => { if (modalRef.current) modalRef.current.scrollTop = modalRef.current.scrollHeight }, 50)
       } else {
         onClose()
       }
@@ -204,7 +204,7 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
 
   return (
     <div className="inv-modal-backdrop" onClick={onClose}>
-      <div className="inv-modal" onClick={e => e.stopPropagation()}>
+      <div className="inv-modal" ref={modalRef} onClick={e => e.stopPropagation()}>
         <div className="inv-modal-header">
           <span>
             {createdNumber ? `Número registrado — ${createdNumber.phone_number}` : initial ? 'Editar número' : 'Registrar número'}
@@ -285,7 +285,7 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
 
           {/* Automations section — only when we have an ID (edit or just created) */}
           {isEdit && (
-            <div className="inv-auto-section" ref={autoSectionRef}>
+            <div className="inv-auto-section">
               <div className="inv-auto-section-header">
                 <span>Automações ({automations.length})</span>
                 {!showAddAuto && (

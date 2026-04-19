@@ -198,16 +198,14 @@ function KanbanColumn({ column, cards, onAddCard, onEditCard, onDeleteCard, onDe
 const EMPTY_CARD = { profile_name: '', supplier: '', bm_id: '', bm_name: '', notes: '' }
 
 function CardModal({ initial, columnId, onSave, onCardUpdated, onClose }) {
-  // createdCard: after creation we stay open in edit mode (same pattern as Inventario)
-  const [createdCard, setCreatedCard] = useState(null)
+  // savedCard: set after the first save (create OR edit) — unlocks WABAs section
+  const [savedCard, setSavedCard] = useState(initial ?? null)
   const [form, setForm]   = useState(initial ? { ...EMPTY_CARD, ...initial } : { ...EMPTY_CARD })
   const [saving, setSaving] = useState(false)
+  const [basicSaved, setBasicSaved] = useState(!!initial) // true when basic data has been saved at least once
 
-  const effectiveCard = createdCard ?? initial  // card we use for waba/phone calls
-  const isEdit = !!effectiveCard
-
-  // WABAs state — driven from effectiveCard
-  const [wabas, setWabas] = useState(effectiveCard?.wabas ?? [])
+  // WABAs state initialised from the card (edit mode) or empty (create mode)
+  const [wabas, setWabas] = useState(initial?.wabas ?? [])
   const [addingWaba, setAddingWaba]   = useState(false)
   const [editingWabaId, setEditingWabaId] = useState(null)
 
@@ -220,11 +218,11 @@ function CardModal({ initial, columnId, onSave, onCardUpdated, onClose }) {
     setSaving(true)
     try {
       const saved = await onSave(form)
-      if (!initial && saved) {
-        setCreatedCard(saved)
-        setWabas(saved.wabas ?? [])
-      } else {
-        onClose()
+      if (saved) {
+        setSavedCard(saved)
+        setWabas(saved.wabas ?? wabas)
+        setBasicSaved(true)
+        onCardUpdated?.(saved)
       }
     } catch (err) {
       alert(err.response?.data?.error || err.message)
@@ -234,12 +232,12 @@ function CardModal({ initial, columnId, onSave, onCardUpdated, onClose }) {
   }
 
   function notifyUpdate(newWabas) {
-    onCardUpdated?.({ ...effectiveCard, wabas: newWabas })
+    onCardUpdated?.({ ...savedCard, wabas: newWabas })
   }
 
   // ── WABA handlers ──
   async function handleCreateWaba(wabaForm) {
-    const waba = await kanbanService.createWaba(effectiveCard.id, wabaForm)
+    const waba = await kanbanService.createWaba(savedCard.id, wabaForm)
     const updated = [...wabas, waba]
     setWabas(updated)
     notifyUpdate(updated)
@@ -247,7 +245,7 @@ function CardModal({ initial, columnId, onSave, onCardUpdated, onClose }) {
   }
 
   async function handleUpdateWaba(wabaId, wabaForm) {
-    const waba = await kanbanService.updateWaba(effectiveCard.id, wabaId, wabaForm)
+    const waba = await kanbanService.updateWaba(savedCard.id, wabaId, wabaForm)
     const updated = wabas.map(w => w.id === wabaId ? { ...waba, phones: w.phones } : w)
     setWabas(updated)
     notifyUpdate(updated)
@@ -256,7 +254,7 @@ function CardModal({ initial, columnId, onSave, onCardUpdated, onClose }) {
 
   async function handleDeleteWaba(wabaId) {
     if (!window.confirm('Remover esta WABA e seus números?')) return
-    await kanbanService.deleteWaba(effectiveCard.id, wabaId)
+    await kanbanService.deleteWaba(savedCard.id, wabaId)
     const updated = wabas.filter(w => w.id !== wabaId)
     setWabas(updated)
     notifyUpdate(updated)
@@ -264,14 +262,14 @@ function CardModal({ initial, columnId, onSave, onCardUpdated, onClose }) {
 
   // ── Phone handlers ──
   async function handleCreatePhone(wabaId, phone) {
-    const p = await kanbanService.createPhone(effectiveCard.id, wabaId, { phone_number: phone })
+    const p = await kanbanService.createPhone(savedCard.id, wabaId, { phone_number: phone })
     const updated = wabas.map(w => w.id === wabaId ? { ...w, phones: [...(w.phones ?? []), p] } : w)
     setWabas(updated)
     notifyUpdate(updated)
   }
 
   async function handleDeletePhone(wabaId, phoneId) {
-    await kanbanService.deletePhone(effectiveCard.id, wabaId, phoneId)
+    await kanbanService.deletePhone(savedCard.id, wabaId, phoneId)
     const updated = wabas.map(w => w.id === wabaId ? { ...w, phones: w.phones.filter(p => p.id !== phoneId) } : w)
     setWabas(updated)
     notifyUpdate(updated)
@@ -281,9 +279,7 @@ function CardModal({ initial, columnId, onSave, onCardUpdated, onClose }) {
     <div className="kb-modal-backdrop" onClick={onClose}>
       <div className="kb-modal" onClick={e => e.stopPropagation()}>
         <div className="kb-modal-header">
-          <span>
-            {createdCard ? `Card criado — ${createdCard.profile_name || 'BM'}` : initial ? 'Editar card' : 'Novo card'}
-          </span>
+          <span>{initial ? 'Editar card' : 'Novo card'}</span>
           <button className="kb-icon-btn" onClick={onClose}><IconX /></button>
         </div>
 
@@ -291,29 +287,38 @@ function CardModal({ initial, columnId, onSave, onCardUpdated, onClose }) {
           {/* ── Dados básicos ── */}
           <div className="kb-form-row">
             <label>Perfil</label>
-            <input value={form.profile_name || ''} onChange={field('profile_name')} placeholder="Nome do perfil" disabled={!!createdCard} />
+            <input value={form.profile_name || ''} onChange={field('profile_name')} placeholder="Nome do perfil" />
           </div>
           <div className="kb-form-row">
             <label>Fornecedor</label>
-            <input value={form.supplier || ''} onChange={field('supplier')} placeholder="Fornecedor" disabled={!!createdCard} />
+            <input value={form.supplier || ''} onChange={field('supplier')} placeholder="Fornecedor" />
           </div>
           <div className="kb-form-2col">
             <div className="kb-form-row">
               <label>BM ID</label>
-              <input value={form.bm_id || ''} onChange={field('bm_id')} placeholder="ID da BM" className="kb-mono" disabled={!!createdCard} />
+              <input value={form.bm_id || ''} onChange={field('bm_id')} placeholder="ID da BM" className="kb-mono" />
             </div>
             <div className="kb-form-row">
               <label>BM Nome</label>
-              <input value={form.bm_name || ''} onChange={field('bm_name')} placeholder="Nome da BM" disabled={!!createdCard} />
+              <input value={form.bm_name || ''} onChange={field('bm_name')} placeholder="Nome da BM" />
             </div>
           </div>
           <div className="kb-form-row">
             <label>Observações</label>
-            <textarea value={form.notes || ''} onChange={field('notes')} rows={2} placeholder="Notas livres..." disabled={!!createdCard} />
+            <textarea value={form.notes || ''} onChange={field('notes')} rows={2} placeholder="Notas livres..." />
           </div>
 
-          {/* ── WABAs — só aparece quando há um card (edit ou recém-criado) ── */}
-          {isEdit && (
+          <div className="kb-modal-footer" style={{ marginBottom: basicSaved ? 0 : undefined }}>
+            <button type="button" className="kb-btn kb-btn--ghost" onClick={onClose}>
+              {basicSaved ? 'Fechar' : 'Cancelar'}
+            </button>
+            <button type="submit" className="kb-btn kb-btn--primary" disabled={saving}>
+              {saving ? 'Salvando…' : basicSaved ? 'Atualizar dados' : 'Salvar e continuar'}
+            </button>
+          </div>
+
+          {/* ── WABAs — aparece assim que os dados básicos forem salvos ── */}
+          {basicSaved && savedCard && (
             <div className="kb-waba-section">
               <div className="kb-waba-section-header">
                 <span>WABAs ({wabas.length})</span>
@@ -348,20 +353,6 @@ function CardModal({ initial, columnId, onSave, onCardUpdated, onClose }) {
                   onDeletePhone={(pid) => handleDeletePhone(w.id, pid)}
                 />
               ))}
-            </div>
-          )}
-
-          {!createdCard && (
-            <div className="kb-modal-footer">
-              <button type="button" className="kb-btn kb-btn--ghost" onClick={onClose}>Cancelar</button>
-              <button type="submit" className="kb-btn kb-btn--primary" disabled={saving}>
-                {saving ? 'Salvando…' : 'Salvar'}
-              </button>
-            </div>
-          )}
-          {createdCard && (
-            <div className="kb-modal-footer">
-              <button type="button" className="kb-btn kb-btn--primary" onClick={onClose}>Fechar</button>
             </div>
           )}
         </form>
