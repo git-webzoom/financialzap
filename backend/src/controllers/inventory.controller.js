@@ -71,9 +71,9 @@ async function createAutomation(req, res) {
   try {
     const numberId = Number(req.params.numberId)
     await assertNumberOwnership(req.user.sub, numberId)
-    const { automation_name, template_name } = req.body
+    const { automation_name, template_name, daily_volume } = req.body
     if (!automation_name) return res.status(400).json({ error: 'automation_name é obrigatório' })
-    const auto = await inventory.createAutomation(numberId, { automation_name, template_name })
+    const auto = await inventory.createAutomation(numberId, { automation_name, template_name, daily_volume })
     res.status(201).json({ automation: auto })
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message })
@@ -102,4 +102,40 @@ async function deleteAutomation(req, res) {
   }
 }
 
-module.exports = { listNumbers, createNumber, updateNumber, deleteNumber, listAutomations, createAutomation, updateAutomation, deleteAutomation }
+// ─── Health Logs ──────────────────────────────────────────────────────────────
+
+async function listHealthLogs(req, res) {
+  try {
+    const numberId = Number(req.params.numberId)
+    const data = await inventory.listHealthLogs(req.user.sub, numberId)
+    res.json({ logs: data })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message })
+  }
+}
+
+async function createHealthLog(req, res) {
+  try {
+    const numberId = Number(req.params.numberId)
+    const log = await inventory.createHealthLog(req.user.sub, numberId, req.body)
+    res.status(201).json({ log })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message })
+  }
+}
+
+async function deleteHealthLog(req, res) {
+  try {
+    const numberId = Number(req.params.numberId)
+    await inventory.deleteHealthLog(req.user.sub, numberId, Number(req.params.id))
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message })
+  }
+}
+
+module.exports = {
+  listNumbers, createNumber, updateNumber, deleteNumber,
+  listAutomations, createAutomation, updateAutomation, deleteAutomation,
+  listHealthLogs, createHealthLog, deleteHealthLog,
+}

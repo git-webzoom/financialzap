@@ -223,9 +223,10 @@ async function updateCard(userId, cardId, fields) {
     sql: `UPDATE bm_cards SET
             column_id = ?, position = ?, profile_name = ?, supplier = ?,
             bm_id = ?, bm_name = ?, waba_id = ?, waba_name = ?,
-            phone_number = ?, notes = ?, updated_at = ?
+            phone_number = ?, notes = ?, updated_at = ?,
+            moved_at = ?
           WHERE id = ? AND user_id = ?`,
-    args: [newColumnId, newPosition, newProfileName, newSupplier, newBmId, newBmName, newWabaId, newWabaName, newPhone, newNotes, now, cardId, userId],
+    args: [newColumnId, newPosition, newProfileName, newSupplier, newBmId, newBmName, newWabaId, newWabaName, newPhone, newNotes, now, movingColumn ? now : (current.moved_at ?? now), cardId, userId],
   })
 
   const { rows: updated } = await db.execute({

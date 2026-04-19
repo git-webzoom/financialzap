@@ -41,3 +41,19 @@ export async function updateAutomation(numberId, automationId, payload) {
 export async function deleteAutomation(numberId, automationId) {
   await api.delete(`/api/inventory/${numberId}/automations/${automationId}`)
 }
+
+// ─── Health Logs ──────────────────────────────────────────────────────────────
+
+export async function listHealthLogs(numberId) {
+  const { data } = await api.get(`/api/inventory/${numberId}/health-logs`)
+  return data.logs
+}
+
+export async function createHealthLog(numberId, payload) {
+  const { data } = await api.post(`/api/inventory/${numberId}/health-logs`, payload)
+  return data.log
+}
+
+export async function deleteHealthLog(numberId, logId) {
+  await api.delete(`/api/inventory/${numberId}/health-logs/${logId}`)
+}

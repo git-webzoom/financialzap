@@ -231,3 +231,19 @@ CREATE TABLE IF NOT EXISTS number_automations (
 );
 
 CREATE INDEX IF NOT EXISTS idx_number_automations_number_id ON number_automations(number_id);
+
+-- ─── number_health_logs ───────────────────────────────────────────────────────
+-- Histórico de eventos de saúde de cada número do inventário.
+CREATE TABLE IF NOT EXISTS number_health_logs (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  number_id   INTEGER NOT NULL,
+  event_type  TEXT    NOT NULL CHECK (event_type IN (
+                'banned', 'flagged', 'tier_up', 'tier_down',
+                'recovered', 'deactivated', 'other'
+              )),
+  description TEXT,
+  occurred_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (number_id) REFERENCES number_inventory(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_number_health_logs_number_id ON number_health_logs(number_id);

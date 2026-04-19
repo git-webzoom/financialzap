@@ -50,6 +50,30 @@ function IconX() {
   )
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function daysInStage(movedAt) {
+  if (!movedAt) return null
+  try {
+    const ts = movedAt.includes('T') ? movedAt : movedAt + 'T00:00:00Z'
+    const diff = Date.now() - new Date(ts).getTime()
+    return Math.floor(diff / (1000 * 60 * 60 * 24))
+  } catch { return null }
+}
+
+function DaysIndicator({ days }) {
+  if (days === null) return null
+  let color = '#4a5568'
+  let icon  = ''
+  if (days >= 21) { color = '#ef4444'; icon = '⚠ ' }
+  else if (days >= 8) { color = '#f59e0b'; icon = '⚠ ' }
+  return (
+    <span className="kb-days-badge" style={{ color }}>
+      {icon}{days}d nesta coluna
+    </span>
+  )
+}
+
 // ─── Card component (sortable) ────────────────────────────────────────────────
 
 function KanbanCard({ card, onEdit, onDelete, isDragging }) {
@@ -59,6 +83,7 @@ function KanbanCard({ card, onEdit, onDelete, isDragging }) {
     transition,
     opacity: isDragging ? 0.4 : 1,
   }
+  const days = daysInStage(card.moved_at)
   return (
     <div ref={setNodeRef} style={style} className="kb-card" {...attributes} {...listeners}>
       <div className="kb-card-header">
@@ -74,6 +99,7 @@ function KanbanCard({ card, onEdit, onDelete, isDragging }) {
       {card.waba_name   && <div className="kb-card-row"><span className="kb-card-label">WABA</span><span>{card.waba_name}</span></div>}
       {card.phone_number && <div className="kb-card-row"><span className="kb-card-label">Número</span><span className="kb-card-mono">{card.phone_number}</span></div>}
       {card.notes       && <div className="kb-card-notes">{card.notes}</div>}
+      {days !== null && <div className="kb-card-footer"><DaysIndicator days={days} /></div>}
     </div>
   )
 }
@@ -97,6 +123,10 @@ function KanbanColumn({ column, cards, onAddCard, onEditCard, onDeleteCard, onDe
     setEditing(false)
   }
 
+  // Average days in stage for non-null cards
+  const daysValues = cards.map(c => daysInStage(c.moved_at)).filter(d => d !== null)
+  const avgDays = daysValues.length > 0 ? Math.round(daysValues.reduce((s, d) => s + d, 0) / daysValues.length) : null
+
   return (
     <div className="kb-col">
       <div className="kb-col-header">
@@ -115,6 +145,11 @@ function KanbanColumn({ column, cards, onAddCard, onEditCard, onDeleteCard, onDe
             <span className="kb-col-title" onClick={() => setEditing(true)} title="Clique para editar">{column.title}</span>
           )}
           <span className="kb-col-count">{cards.length}</span>
+          {avgDays !== null && (
+            <span className="kb-col-avg" style={{ color: avgDays >= 21 ? '#ef4444' : avgDays >= 8 ? '#f59e0b' : '#4a5568' }}>
+              ~{avgDays}d
+            </span>
+          )}
         </div>
         <div className="kb-col-meta-actions">
           <button
@@ -578,6 +613,24 @@ const CSS_STR = `
     padding-top: 6px;
     line-height: 1.5;
     white-space: pre-wrap;
+  }
+  .kb-card-footer {
+    margin-top: 7px;
+    border-top: 1px solid #1a2030;
+    padding-top: 6px;
+  }
+  .kb-days-badge {
+    font-size: 10px;
+    font-weight: 500;
+  }
+  .kb-col-avg {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 1px 6px;
+    background: #1a1f28;
+    border: 1px solid #252c38;
+    border-radius: 8px;
+    flex-shrink: 0;
   }
 
   .kb-add-card-btn {

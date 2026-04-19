@@ -60,6 +60,32 @@ async function migrate() {
   `)
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_number_automations_number_id ON number_automations(number_id)`)
 
+  // number_health_logs — histórico de eventos de saúde por número
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS number_health_logs (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      number_id   INTEGER NOT NULL,
+      event_type  TEXT    NOT NULL CHECK (event_type IN (
+                    'banned', 'flagged', 'tier_up', 'tier_down',
+                    'recovered', 'deactivated', 'other'
+                  )),
+      description TEXT,
+      occurred_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (number_id) REFERENCES number_inventory(id) ON DELETE CASCADE
+    )
+  `)
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_number_health_logs_number_id ON number_health_logs(number_id)`)
+
+  // Melhoria 2 — quality/tier no inventário
+  await addColumnIfMissing(db, 'number_inventory', 'quality_rating',       'TEXT')
+  await addColumnIfMissing(db, 'number_inventory', 'messaging_limit_tier', 'TEXT')
+
+  // Melhoria 3 — volume diário por automação
+  await addColumnIfMissing(db, 'number_automations', 'daily_volume', 'INTEGER DEFAULT 0')
+
+  // Melhoria 4 — moved_at nos cards do Kanban
+  await addColumnIfMissing(db, 'bm_cards', 'moved_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP')
+
   console.log('[db] Migration complete.')
 }
 

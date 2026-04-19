@@ -57,6 +57,29 @@ const ORIGIN_CFG = {
   rented: { label: 'Alugado', color: '#a855f7', bg: '#a855f718', border: '#a855f735' },
 }
 
+const QUALITY_CFG = {
+  GREEN:  { label: 'Verde',    color: '#22c55e', bg: '#22c55e18', border: '#22c55e35' },
+  YELLOW: { label: 'Amarelo',  color: '#f59e0b', bg: '#f59e0b18', border: '#f59e0b35' },
+  RED:    { label: 'Vermelho', color: '#ef4444', bg: '#ef444418', border: '#ef444435' },
+}
+
+const TIER_LABELS = {
+  TIER_1: 'Tier 1 (1k/dia)',
+  TIER_2: 'Tier 2 (10k/dia)',
+  TIER_3: 'Tier 3 (100k/dia)',
+  TIER_4: 'Tier 4 (ilimitado)',
+}
+
+const HEALTH_EVENT_CFG = {
+  banned:      { label: 'Banido',        color: '#ef4444', icon: '🚫' },
+  flagged:     { label: 'Flagado',       color: '#f59e0b', icon: '⚠' },
+  tier_up:     { label: 'Tier Up',       color: '#22c55e', icon: '⬆' },
+  tier_down:   { label: 'Tier Down',     color: '#f59e0b', icon: '⬇' },
+  recovered:   { label: 'Recuperado',    color: '#22c55e', icon: '✓' },
+  deactivated: { label: 'Desativado',    color: '#8a94a6', icon: '✕' },
+  other:       { label: 'Outro',         color: '#8a94a6', icon: '•' },
+}
+
 function StatusBadge({ status }) {
   const cfg = STATUS_CFG[status] ?? { label: status, color: '#8a94a6', bg: '#8a94a615', border: '#8a94a630' }
   return (
@@ -76,6 +99,29 @@ function OriginBadge({ origin }) {
   )
 }
 
+function QualityBadge({ quality }) {
+  if (!quality) return null
+  const cfg = QUALITY_CFG[quality] ?? { label: quality, color: '#8a94a6', bg: '#8a94a615', border: '#8a94a630' }
+  return (
+    <span className="inv-badge" style={{ color: cfg.color, background: cfg.bg, borderColor: cfg.border }}>
+      {cfg.label}
+    </span>
+  )
+}
+
+function VolumeBadge({ total, limit }) {
+  if (total === 0) return null
+  const over = limit !== null && total > limit
+  const color = over ? '#ef4444' : '#8a94a6'
+  const bg    = over ? '#ef444418' : '#8a94a615'
+  const border = over ? '#ef444435' : '#8a94a630'
+  return (
+    <span className="inv-badge" style={{ color, background: bg, borderColor: border }}>
+      {over ? '⚠ ' : ''}{total.toLocaleString()}/dia
+    </span>
+  )
+}
+
 function AutoCount({ count }) {
   if (!count) return <span className="inv-dash">Nenhuma</span>
   return (
@@ -90,16 +136,21 @@ function AutoCount({ count }) {
 const EMPTY_FORM = {
   phone_number: '', origin: 'own', supplier: '', bm_name: '',
   waba_name: '', status: 'free', notes: '',
+  quality_rating: '', messaging_limit_tier: '',
 }
 
 function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
-  const [form, setForm]         = useState(initial ? { ...initial } : { ...EMPTY_FORM })
+  const [form, setForm]         = useState(initial ? { ...EMPTY_FORM, ...initial } : { ...EMPTY_FORM })
   const [saving, setSaving]     = useState(false)
+  // createdNumber: after creation we stay open in edit mode
+  const [createdNumber, setCreatedNumber] = useState(null)
   const [automations, setAutos] = useState(initial?.automations ?? [])
   const [showAddAuto, setShowAdd] = useState(false)
   const [editingAuto, setEditingAuto] = useState(null)
 
-  const isEdit = !!initial
+  // The "effective" number for automation calls (either the passed `initial` or the just-created one)
+  const effectiveNumber = createdNumber ?? initial
+  const isEdit = !!effectiveNumber
 
   function field(key) {
     return (e) => setForm(f => ({ ...f, [key]: e.target.value }))
@@ -109,8 +160,14 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
     e.preventDefault()
     setSaving(true)
     try {
-      await onSave(form)
-      onClose()
+      const saved = await onSave(form)
+      if (!initial && saved) {
+        // Creation — stay open, switch to edit mode
+        setCreatedNumber(saved)
+        setAutos(saved.automations ?? [])
+      } else {
+        onClose()
+      }
     } catch (err) {
       alert(err.response?.data?.error || err.message)
     } finally {
@@ -119,52 +176,54 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
   }
 
   async function handleCreateAuto(autoForm) {
-    const auto = await inventoryService.createAutomation(initial.id, autoForm)
+    const auto = await inventoryService.createAutomation(effectiveNumber.id, autoForm)
     const updated = [...automations, auto]
     setAutos(updated)
-    onNumberUpdated?.({ ...initial, automations: updated })
+    onNumberUpdated?.({ ...effectiveNumber, automations: updated })
     setShowAdd(false)
   }
 
   async function handleUpdateAuto(autoId, autoForm) {
-    const auto = await inventoryService.updateAutomation(initial.id, autoId, autoForm)
+    const auto = await inventoryService.updateAutomation(effectiveNumber.id, autoId, autoForm)
     const updated = automations.map(a => a.id === autoId ? auto : a)
     setAutos(updated)
-    onNumberUpdated?.({ ...initial, automations: updated })
+    onNumberUpdated?.({ ...effectiveNumber, automations: updated })
     setEditingAuto(null)
   }
 
   async function handleDeleteAuto(autoId) {
     if (!window.confirm('Remover esta automação?')) return
-    await inventoryService.deleteAutomation(initial.id, autoId)
+    await inventoryService.deleteAutomation(effectiveNumber.id, autoId)
     const updated = automations.filter(a => a.id !== autoId)
     setAutos(updated)
-    onNumberUpdated?.({ ...initial, automations: updated })
+    onNumberUpdated?.({ ...effectiveNumber, automations: updated })
   }
 
   return (
     <div className="inv-modal-backdrop" onClick={onClose}>
       <div className="inv-modal" onClick={e => e.stopPropagation()}>
         <div className="inv-modal-header">
-          <span>{initial ? 'Editar número' : 'Registrar número'}</span>
+          <span>
+            {createdNumber ? `Número registrado — ${createdNumber.phone_number}` : initial ? 'Editar número' : 'Registrar número'}
+          </span>
           <button className="inv-icon-btn" onClick={onClose}><IconX /></button>
         </div>
         <form className="inv-modal-form" onSubmit={handleSubmit}>
           <div className="inv-form-row">
             <label>Número de Telefone *</label>
-            <input value={form.phone_number} onChange={field('phone_number')} placeholder="+55 11 99999-9999" className="inv-mono" required />
+            <input value={form.phone_number} onChange={field('phone_number')} placeholder="+55 11 99999-9999" className="inv-mono" required disabled={!!createdNumber} />
           </div>
           <div className="inv-form-2col">
             <div className="inv-form-row">
               <label>Origem *</label>
-              <select value={form.origin} onChange={field('origin')} required>
+              <select value={form.origin} onChange={field('origin')} required disabled={!!createdNumber}>
                 <option value="own">Próprio</option>
                 <option value="rented">Alugado</option>
               </select>
             </div>
             <div className="inv-form-row">
               <label>Status</label>
-              <select value={form.status} onChange={field('status')}>
+              <select value={form.status} onChange={field('status')} disabled={!!createdNumber}>
                 <option value="free">Livre</option>
                 <option value="in_use">Em uso</option>
                 <option value="reserved">Reservado</option>
@@ -173,24 +232,45 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
           </div>
           <div className="inv-form-row">
             <label>Fornecedor</label>
-            <input value={form.supplier || ''} onChange={field('supplier')} placeholder="Nome do fornecedor" />
+            <input value={form.supplier || ''} onChange={field('supplier')} placeholder="Nome do fornecedor" disabled={!!createdNumber} />
           </div>
           <div className="inv-form-2col">
             <div className="inv-form-row">
               <label>BM</label>
-              <input value={form.bm_name || ''} onChange={field('bm_name')} placeholder="Nome da BM" />
+              <input value={form.bm_name || ''} onChange={field('bm_name')} placeholder="Nome da BM" disabled={!!createdNumber} />
             </div>
             <div className="inv-form-row">
               <label>WABA</label>
-              <input value={form.waba_name || ''} onChange={field('waba_name')} placeholder="Nome da WABA" />
+              <input value={form.waba_name || ''} onChange={field('waba_name')} placeholder="Nome da WABA" disabled={!!createdNumber} />
+            </div>
+          </div>
+          <div className="inv-form-2col">
+            <div className="inv-form-row">
+              <label>Qualidade</label>
+              <select value={form.quality_rating || ''} onChange={field('quality_rating')} disabled={!!createdNumber}>
+                <option value="">— Não definido —</option>
+                <option value="GREEN">Verde</option>
+                <option value="YELLOW">Amarelo</option>
+                <option value="RED">Vermelho</option>
+              </select>
+            </div>
+            <div className="inv-form-row">
+              <label>Tier de limite</label>
+              <select value={form.messaging_limit_tier || ''} onChange={field('messaging_limit_tier')} disabled={!!createdNumber}>
+                <option value="">— Não definido —</option>
+                <option value="TIER_1">Tier 1 (1k/dia)</option>
+                <option value="TIER_2">Tier 2 (10k/dia)</option>
+                <option value="TIER_3">Tier 3 (100k/dia)</option>
+                <option value="TIER_4">Tier 4 (ilimitado)</option>
+              </select>
             </div>
           </div>
           <div className="inv-form-row">
             <label>Observações</label>
-            <textarea value={form.notes || ''} onChange={field('notes')} rows={3} placeholder="Notas livres..." />
+            <textarea value={form.notes || ''} onChange={field('notes')} rows={3} placeholder="Notas livres..." disabled={!!createdNumber} />
           </div>
 
-          {/* Automations section — only in edit mode */}
+          {/* Automations section — only when we have an ID (edit or just created) */}
           {isEdit && (
             <div className="inv-auto-section">
               <div className="inv-auto-section-header">
@@ -216,6 +296,7 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
                     <tr>
                       <th>Automação</th>
                       <th>Template</th>
+                      <th>Vol./dia</th>
                       <th>Ações</th>
                     </tr>
                   </thead>
@@ -225,6 +306,7 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
                         <tr key={a.id} className="auto-row">
                           <td className="auto-td">{a.automation_name}</td>
                           <td className="auto-td auto-mono">{a.template_name || <span className="inv-dash">—</span>}</td>
+                          <td className="auto-td">{a.daily_volume > 0 ? a.daily_volume.toLocaleString() : <span className="inv-dash">—</span>}</td>
                           <td className="auto-td">
                             <div className="inv-actions">
                               <button type="button" className="inv-icon-btn" onClick={() => setEditingAuto(editingAuto === a.id ? null : a.id)} title="Editar"><IconEdit /></button>
@@ -234,7 +316,7 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
                         </tr>
                         {editingAuto === a.id && (
                           <tr key={`edit-${a.id}`}>
-                            <td colSpan={3} className="auto-td-form">
+                            <td colSpan={4} className="auto-td-form">
                               <AutoForm initial={a} onSave={(f) => handleUpdateAuto(a.id, f)} onCancel={() => setEditingAuto(null)} />
                             </td>
                           </tr>
@@ -247,27 +329,91 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
             </div>
           )}
 
-          <div className="inv-modal-footer">
-            <button type="button" className="inv-btn inv-btn--ghost" onClick={onClose}>Cancelar</button>
-            <button type="submit" className="inv-btn inv-btn--primary" disabled={saving}>
-              {saving ? 'Salvando…' : 'Salvar'}
-            </button>
-          </div>
+          {!createdNumber && (
+            <div className="inv-modal-footer">
+              <button type="button" className="inv-btn inv-btn--ghost" onClick={onClose}>Cancelar</button>
+              <button type="submit" className="inv-btn inv-btn--primary" disabled={saving}>
+                {saving ? 'Salvando…' : 'Salvar'}
+              </button>
+            </div>
+          )}
+          {createdNumber && (
+            <div className="inv-modal-footer">
+              <button type="button" className="inv-btn inv-btn--primary" onClick={onClose}>Fechar</button>
+            </div>
+          )}
         </form>
       </div>
     </div>
   )
 }
 
-// ─── Automation form (inline inside drawer) ───────────────────────────────────
+// ─── Automation form (inline) ─────────────────────────────────────────────────
 
 function AutoForm({ initial, onSave, onCancel }) {
-  const [form, setForm]     = useState(initial ? { automation_name: initial.automation_name, template_name: initial.template_name || '' } : { automation_name: '', template_name: '' })
+  const [form, setForm]     = useState(initial
+    ? { automation_name: initial.automation_name, template_name: initial.template_name || '', daily_volume: initial.daily_volume ?? 0 }
+    : { automation_name: '', template_name: '', daily_volume: 0 }
+  )
   const [saving, setSaving] = useState(false)
 
   async function handleSubmit(e) {
     e.preventDefault()
     if (!form.automation_name.trim() || !form.template_name.trim()) return
+    setSaving(true)
+    try {
+      await onSave({ ...form, daily_volume: Number(form.daily_volume) || 0 })
+    } catch (err) {
+      alert(err.response?.data?.error || err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form className="auto-form" onSubmit={handleSubmit}>
+      <div className="auto-form-row3">
+        <input
+          className="auto-input"
+          value={form.automation_name}
+          onChange={e => setForm(f => ({ ...f, automation_name: e.target.value }))}
+          placeholder="Nome da automação *"
+          required
+        />
+        <input
+          className="auto-input"
+          value={form.template_name}
+          onChange={e => setForm(f => ({ ...f, template_name: e.target.value }))}
+          placeholder="Nome do template *"
+          required
+        />
+        <input
+          className="auto-input"
+          type="number"
+          min="0"
+          value={form.daily_volume}
+          onChange={e => setForm(f => ({ ...f, daily_volume: e.target.value }))}
+          placeholder="Vol./dia"
+        />
+      </div>
+      <div className="auto-form-btns">
+        <button type="submit" className="inv-btn inv-btn--primary inv-btn--sm" disabled={saving || !form.automation_name.trim() || !form.template_name.trim()}>
+          {saving ? 'Salvando…' : 'Salvar'}
+        </button>
+        <button type="button" className="inv-btn inv-btn--ghost inv-btn--sm" onClick={onCancel}>Cancelar</button>
+      </div>
+    </form>
+  )
+}
+
+// ─── Health log form ──────────────────────────────────────────────────────────
+
+function HealthLogForm({ onSave, onCancel }) {
+  const [form, setForm]     = useState({ event_type: 'flagged', description: '', occurred_at: '' })
+  const [saving, setSaving] = useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
     setSaving(true)
     try {
       await onSave(form)
@@ -280,22 +426,32 @@ function AutoForm({ initial, onSave, onCancel }) {
 
   return (
     <form className="auto-form" onSubmit={handleSubmit}>
-      <input
-        className="auto-input"
-        value={form.automation_name}
-        onChange={e => setForm(f => ({ ...f, automation_name: e.target.value }))}
-        placeholder="Nome da automação *"
-        required
-      />
-      <input
-        className="auto-input"
-        value={form.template_name}
-        onChange={e => setForm(f => ({ ...f, template_name: e.target.value }))}
-        placeholder="Nome do template *"
-        required
-      />
+      <div className="inv-form-row">
+        <label>Tipo de evento</label>
+        <select value={form.event_type} onChange={e => setForm(f => ({ ...f, event_type: e.target.value }))}>
+          <option value="banned">Banido</option>
+          <option value="flagged">Flagado</option>
+          <option value="tier_up">Tier Up</option>
+          <option value="tier_down">Tier Down</option>
+          <option value="recovered">Recuperado</option>
+          <option value="deactivated">Desativado</option>
+          <option value="other">Outro</option>
+        </select>
+      </div>
+      <div className="inv-form-row">
+        <label>Data/hora (opcional)</label>
+        <input
+          type="datetime-local"
+          value={form.occurred_at}
+          onChange={e => setForm(f => ({ ...f, occurred_at: e.target.value }))}
+        />
+      </div>
+      <div className="inv-form-row">
+        <label>Descrição</label>
+        <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} placeholder="Detalhes do evento..." />
+      </div>
       <div className="auto-form-btns">
-        <button type="submit" className="inv-btn inv-btn--primary inv-btn--sm" disabled={saving || !form.automation_name.trim() || !form.template_name.trim()}>
+        <button type="submit" className="inv-btn inv-btn--primary inv-btn--sm" disabled={saving}>
           {saving ? 'Salvando…' : 'Salvar'}
         </button>
         <button type="button" className="inv-btn inv-btn--ghost inv-btn--sm" onClick={onCancel}>Cancelar</button>
@@ -313,10 +469,30 @@ function DetailDrawer({ number: initialNumber, onClose, onNumberUpdated }) {
     origin: initialNumber.origin, supplier: initialNumber.supplier || '',
     bm_name: initialNumber.bm_name || '', waba_name: initialNumber.waba_name || '',
     status: initialNumber.status, notes: initialNumber.notes || '',
+    quality_rating: initialNumber.quality_rating || '',
+    messaging_limit_tier: initialNumber.messaging_limit_tier || '',
   })
-  const [saving, setSaving]         = useState(false)
-  const [showAddAuto, setShowAdd]   = useState(false)
-  const [editingAuto, setEditingAuto] = useState(null) // automation id being edited
+  const [saving, setSaving]           = useState(false)
+  const [showAddAuto, setShowAdd]     = useState(false)
+  const [editingAuto, setEditingAuto] = useState(null)
+
+  // Health logs
+  const [healthLogs, setHealthLogs]   = useState([])
+  const [loadingLogs, setLoadingLogs] = useState(true)
+  const [showAddLog, setShowAddLog]   = useState(false)
+
+  useEffect(() => {
+    inventoryService.listHealthLogs(initialNumber.id)
+      .then(setHealthLogs)
+      .catch(() => {})
+      .finally(() => setLoadingLogs(false))
+  }, [initialNumber.id])
+
+  // Recalculate totals from live automations list
+  const tierLimit = { TIER_1: 1000, TIER_2: 10000, TIER_3: 100000, TIER_4: null }[number.messaging_limit_tier] ?? null
+  const totalVolume = automations.reduce((s, a) => s + (a.daily_volume ?? 0), 0)
+  const volumePercent = tierLimit !== null ? Math.min(100, (totalVolume / tierLimit) * 100) : 0
+  const volumeOver = tierLimit !== null && totalVolume > tierLimit
 
   function fieldEdit(key) {
     return (e) => setEditForm(f => ({ ...f, [key]: e.target.value }))
@@ -357,6 +533,26 @@ function DetailDrawer({ number: initialNumber, onClose, onNumberUpdated }) {
     onNumberUpdated({ ...number, automations: updated })
   }
 
+  async function handleCreateLog(form) {
+    const log = await inventoryService.createHealthLog(number.id, form)
+    setHealthLogs(prev => [log, ...prev])
+    setShowAddLog(false)
+  }
+
+  async function handleDeleteLog(logId) {
+    if (!window.confirm('Remover este registro?')) return
+    await inventoryService.deleteHealthLog(number.id, logId)
+    setHealthLogs(prev => prev.filter(l => l.id !== logId))
+  }
+
+  function fmtDate(str) {
+    if (!str) return '—'
+    try {
+      const d = new Date(str.includes('T') ? str : str + 'T00:00:00Z')
+      return d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    } catch { return str }
+  }
+
   return (
     <div className="inv-drawer-backdrop" onClick={onClose}>
       <div className="inv-drawer" onClick={e => e.stopPropagation()}>
@@ -386,6 +582,27 @@ function DetailDrawer({ number: initialNumber, onClose, onNumberUpdated }) {
                     <option value="free">Livre</option>
                     <option value="in_use">Em uso</option>
                     <option value="reserved">Reservado</option>
+                  </select>
+                </div>
+              </div>
+              <div className="inv-form-2col" style={{ marginTop: 12 }}>
+                <div className="inv-form-row">
+                  <label>Qualidade</label>
+                  <select value={editForm.quality_rating || ''} onChange={fieldEdit('quality_rating')}>
+                    <option value="">— Não definido —</option>
+                    <option value="GREEN">Verde</option>
+                    <option value="YELLOW">Amarelo</option>
+                    <option value="RED">Vermelho</option>
+                  </select>
+                </div>
+                <div className="inv-form-row">
+                  <label>Tier de limite</label>
+                  <select value={editForm.messaging_limit_tier || ''} onChange={fieldEdit('messaging_limit_tier')}>
+                    <option value="">— Não definido —</option>
+                    <option value="TIER_1">Tier 1 (1k/dia)</option>
+                    <option value="TIER_2">Tier 2 (10k/dia)</option>
+                    <option value="TIER_3">Tier 3 (100k/dia)</option>
+                    <option value="TIER_4">Tier 4 (ilimitado)</option>
                   </select>
                 </div>
               </div>
@@ -426,6 +643,31 @@ function DetailDrawer({ number: initialNumber, onClose, onNumberUpdated }) {
               )}
             </div>
 
+            {/* Volume progress bar */}
+            {automations.length > 0 && (
+              <div className="inv-volume-bar-wrap">
+                <div className="inv-volume-bar-labels">
+                  <span style={{ color: volumeOver ? '#ef4444' : '#8a94a6' }}>
+                    {volumeOver ? '⚠ ' : ''}{totalVolume.toLocaleString()} msg/dia
+                  </span>
+                  <span className="inv-volume-bar-limit">
+                    {tierLimit !== null ? `limite: ${tierLimit.toLocaleString()}` : 'Tier 4 (ilimitado)'}
+                  </span>
+                </div>
+                {tierLimit !== null && (
+                  <div className="inv-volume-bar-bg">
+                    <div
+                      className="inv-volume-bar-fill"
+                      style={{
+                        width: `${volumePercent}%`,
+                        background: volumeOver ? '#ef4444' : volumePercent > 80 ? '#f59e0b' : '#22c55e',
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
             {showAddAuto && (
               <AutoForm onSave={handleCreateAuto} onCancel={() => setShowAdd(false)} />
             )}
@@ -440,6 +682,7 @@ function DetailDrawer({ number: initialNumber, onClose, onNumberUpdated }) {
                   <tr>
                     <th>Automação</th>
                     <th>Template</th>
+                    <th>Vol./dia</th>
                     <th>Ações</th>
                   </tr>
                 </thead>
@@ -449,6 +692,7 @@ function DetailDrawer({ number: initialNumber, onClose, onNumberUpdated }) {
                       <tr key={a.id} className="auto-row">
                         <td className="auto-td">{a.automation_name}</td>
                         <td className="auto-td auto-mono">{a.template_name || <span className="inv-dash">—</span>}</td>
+                        <td className="auto-td">{a.daily_volume > 0 ? a.daily_volume.toLocaleString() : <span className="inv-dash">—</span>}</td>
                         <td className="auto-td">
                           <div className="inv-actions">
                             <button className="inv-icon-btn" onClick={() => setEditingAuto(editingAuto === a.id ? null : a.id)} title="Editar"><IconEdit /></button>
@@ -458,7 +702,7 @@ function DetailDrawer({ number: initialNumber, onClose, onNumberUpdated }) {
                       </tr>
                       {editingAuto === a.id && (
                         <tr key={`edit-${a.id}`}>
-                          <td colSpan={3} className="auto-td-form">
+                          <td colSpan={4} className="auto-td-form">
                             <AutoForm
                               initial={a}
                               onSave={(form) => handleUpdateAuto(a.id, form)}
@@ -471,6 +715,55 @@ function DetailDrawer({ number: initialNumber, onClose, onNumberUpdated }) {
                   ))}
                 </tbody>
               </table>
+            )}
+          </div>
+
+          {/* ── Section: health logs ── */}
+          <div className="inv-drawer-section">
+            <div className="inv-drawer-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Histórico de saúde</span>
+              {!showAddLog && (
+                <button className="inv-btn inv-btn--ghost inv-btn--sm" onClick={() => setShowAddLog(true)}>
+                  <IconPlus /> Registrar evento
+                </button>
+              )}
+            </div>
+
+            {showAddLog && (
+              <HealthLogForm onSave={handleCreateLog} onCancel={() => setShowAddLog(false)} />
+            )}
+
+            {loadingLogs && <div className="inv-empty-autos">Carregando…</div>}
+
+            {!loadingLogs && healthLogs.length === 0 && !showAddLog && (
+              <div className="inv-empty-autos">Nenhum evento registrado.</div>
+            )}
+
+            {healthLogs.length > 0 && (
+              <div className="inv-timeline">
+                {healthLogs.map(log => {
+                  const cfg = HEALTH_EVENT_CFG[log.event_type] ?? HEALTH_EVENT_CFG.other
+                  return (
+                    <div key={log.id} className="inv-timeline-item">
+                      <div className="inv-timeline-dot" style={{ background: cfg.color }} />
+                      <div className="inv-timeline-content">
+                        <div className="inv-timeline-header">
+                          <span className="inv-timeline-type" style={{ color: cfg.color }}>
+                            {cfg.icon} {cfg.label}
+                          </span>
+                          <span className="inv-timeline-date">{fmtDate(log.occurred_at)}</span>
+                          <button className="inv-icon-btn inv-icon-btn--danger" style={{ width: 22, height: 22 }} onClick={() => handleDeleteLog(log.id)} title="Remover">
+                            <IconX />
+                          </button>
+                        </div>
+                        {log.description && (
+                          <div className="inv-timeline-desc">{log.description}</div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             )}
           </div>
         </div>
@@ -512,7 +805,8 @@ export default function Inventario() {
   }, [numbers, search, filterStatus, filterOrigin])
 
   async function handleCreate(form) {
-    await create(form)
+    const saved = await create(form)
+    return saved  // return so modal can switch to edit mode
   }
 
   async function handleEdit(form) {
@@ -525,7 +819,6 @@ export default function Inventario() {
     try { await remove(id) } catch (err) { alert(err.response?.data?.error || err.message) }
   }
 
-  // Called by drawer when number data changes (to sync main list)
   function handleNumberUpdated(updated) {
     load()
     if (detail?.id === updated.id) setDetail(updated)
@@ -578,6 +871,8 @@ export default function Inventario() {
                 <th>Fornecedor</th>
                 <th>BM</th>
                 <th>WABA</th>
+                <th>Qualidade</th>
+                <th>Vol./dia</th>
                 <th>Automações</th>
                 <th>Status</th>
                 <th>Ações</th>
@@ -585,10 +880,10 @@ export default function Inventario() {
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={8} className="inv-td-center">Carregando…</td></tr>
+                <tr><td colSpan={10} className="inv-td-center">Carregando…</td></tr>
               )}
               {!loading && filtered.length === 0 && (
-                <tr><td colSpan={8} className="inv-td-center">Nenhum número encontrado.</td></tr>
+                <tr><td colSpan={10} className="inv-td-center">Nenhum número encontrado.</td></tr>
               )}
               {filtered.map(n => (
                 <tr key={n.id} className="inv-row">
@@ -601,6 +896,8 @@ export default function Inventario() {
                   <td className="inv-td">{n.supplier || <span className="inv-dash">—</span>}</td>
                   <td className="inv-td">{n.bm_name   || <span className="inv-dash">—</span>}</td>
                   <td className="inv-td">{n.waba_name || <span className="inv-dash">—</span>}</td>
+                  <td className="inv-td"><QualityBadge quality={n.quality_rating} /></td>
+                  <td className="inv-td"><VolumeBadge total={n.total_daily_volume ?? 0} limit={n.tier_limit} /></td>
                   <td className="inv-td"><AutoCount count={n.automations?.length ?? 0} /></td>
                   <td className="inv-td"><StatusBadge status={n.status} /></td>
                   <td className="inv-td">
@@ -621,7 +918,7 @@ export default function Inventario() {
         <NumberModal
           initial={editModal === 'new' ? null : editModal}
           onSave={editModal === 'new' ? handleCreate : handleEdit}
-          onClose={() => setEditModal(null)}
+          onClose={() => { setEditModal(null); load() }}
           onNumberUpdated={handleNumberUpdated}
         />
       )}
@@ -846,6 +1143,9 @@ const CSS_STR = `
   .inv-form-row select:focus,
   .inv-form-row textarea:focus { border-color: #22c55e; }
   .inv-form-row input.inv-mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .inv-form-row input:disabled,
+  .inv-form-row select:disabled,
+  .inv-form-row textarea:disabled { opacity: 0.5; cursor: default; }
   .inv-form-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .inv-modal-footer {
     display: flex;
@@ -937,6 +1237,28 @@ const CSS_STR = `
     margin-bottom: 14px;
   }
 
+  /* Volume progress bar */
+  .inv-volume-bar-wrap { margin-bottom: 12px; }
+  .inv-volume-bar-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #8a94a6;
+    margin-bottom: 5px;
+  }
+  .inv-volume-bar-limit { color: #4a5568; }
+  .inv-volume-bar-bg {
+    height: 6px;
+    background: #1a2030;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .inv-volume-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease, background 0.3s ease;
+  }
+
   /* ── Automation table ── */
   .auto-table {
     width: 100%;
@@ -984,6 +1306,11 @@ const CSS_STR = `
     border-radius: 8px;
     margin-top: 10px;
   }
+  .auto-form-row3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 90px;
+    gap: 8px;
+  }
   .auto-input {
     background: #1a1f28;
     border: 1px solid #252c38;
@@ -994,7 +1321,58 @@ const CSS_STR = `
     padding: 7px 10px;
     outline: none;
     transition: border-color 0.15s;
+    width: 100%;
+    box-sizing: border-box;
   }
   .auto-input:focus { border-color: #22c55e; }
   .auto-form-btns { display: flex; gap: 6px; }
+
+  /* ── Health logs timeline ── */
+  .inv-timeline { display: flex; flex-direction: column; gap: 0; margin-top: 6px; }
+  .inv-timeline-item {
+    display: flex;
+    gap: 12px;
+    position: relative;
+    padding-bottom: 14px;
+  }
+  .inv-timeline-item:last-child { padding-bottom: 0; }
+  .inv-timeline-item:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 14px;
+    bottom: 0;
+    width: 1px;
+    background: #1a2030;
+  }
+  .inv-timeline-dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 3px;
+    box-shadow: 0 0 0 3px #141820;
+  }
+  .inv-timeline-content { flex: 1; min-width: 0; }
+  .inv-timeline-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .inv-timeline-type {
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .inv-timeline-date {
+    font-size: 11px;
+    color: #4a5568;
+    margin-left: auto;
+  }
+  .inv-timeline-desc {
+    font-size: 12px;
+    color: #8a94a6;
+    margin-top: 4px;
+    line-height: 1.5;
+  }
 `

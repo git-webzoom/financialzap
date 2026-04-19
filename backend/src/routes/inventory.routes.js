@@ -16,4 +16,9 @@ router.post('/:numberId/automations',        ctrl.createAutomation)
 router.patch('/:numberId/automations/:id',   ctrl.updateAutomation)
 router.delete('/:numberId/automations/:id',  ctrl.deleteAutomation)
 
+// Health Logs (nested under number)
+router.get('/:numberId/health-logs',         ctrl.listHealthLogs)
+router.post('/:numberId/health-logs',        ctrl.createHealthLog)
+router.delete('/:numberId/health-logs/:id',  ctrl.deleteHealthLog)
+
 module.exports = router
