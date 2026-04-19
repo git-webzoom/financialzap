@@ -8,8 +8,9 @@ const NAV = [
   { to: '/disparos/novo',      label: 'Novo Disparo',  icon: IconSend    },
   { to: '/disparos/historico', label: 'Histórico',     icon: IconClock   },
   { to: '/kanban',             label: 'Kanban BMs',    icon: IconKanban  },
-  { to: '/inventario',         label: 'Números',       icon: IconNumbers },
-  { to: '/configuracoes',      label: 'Configurações', icon: IconGear    },
+  { to: '/inventario',         label: 'Números',       icon: IconNumbers   },
+  { to: '/fornecedores',       label: 'Fornecedores',  icon: IconSupplier },
+  { to: '/configuracoes',      label: 'Configurações', icon: IconGear     },
 ]
 
 export default function Sidebar() {
@@ -165,6 +166,16 @@ function IconNumbers() {
       <rect x="2" y="5" width="5" height="5" rx="1.5" stroke="currentColor" strokeWidth="1.6"/>
       <rect x="2" y="12" width="5" height="5" rx="1.5" stroke="currentColor" strokeWidth="1.6"/>
       <path d="M10 7h8M10 14h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
+function IconSupplier() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <circle cx="10" cy="6" r="3.5" stroke="currentColor" strokeWidth="1.6"/>
+      <path d="M3 17c0-3.314 3.134-6 7-6s7 2.686 7 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+      <path d="M14 10l1.5 1.5M14 13h3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
     </svg>
   )
 }

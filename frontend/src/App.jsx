@@ -10,6 +10,7 @@ import DisparosHistorico from './pages/Disparos/Historico'
 import Configuracoes from './pages/Configuracoes'
 import Kanban from './pages/Kanban'
 import Inventario from './pages/Inventario'
+import Fornecedores from './pages/Fornecedores'
 
 // Layout
 import Layout from './components/Layout/Layout'
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="disparos/historico"  element={<DisparosHistorico />} />
           <Route path="kanban"              element={<Kanban />} />
           <Route path="inventario"          element={<Inventario />} />
+          <Route path="fornecedores"        element={<Fornecedores />} />
           <Route path="configuracoes"       element={<Configuracoes />} />
         </Route>
 

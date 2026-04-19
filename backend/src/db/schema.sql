@@ -270,3 +270,35 @@ CREATE TABLE IF NOT EXISTS number_health_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_number_health_logs_number_id ON number_health_logs(number_id);
+
+-- ─── suppliers ────────────────────────────────────────────────────────────────
+-- Cadastro de fornecedores de BM e/ou Disparo.
+CREATE TABLE IF NOT EXISTS suppliers (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id         INTEGER NOT NULL,
+  name            TEXT    NOT NULL,
+  type            TEXT    NOT NULL CHECK (type IN ('bm', 'disparo', 'both')),
+  status          TEXT    NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'evaluating')),
+  trust_score     INTEGER CHECK (trust_score BETWEEN 1 AND 5),
+  contacts        TEXT,
+  notes           TEXT,
+  created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_suppliers_user_id ON suppliers(user_id);
+CREATE INDEX IF NOT EXISTS idx_suppliers_type    ON suppliers(type);
+CREATE INDEX IF NOT EXISTS idx_suppliers_status  ON suppliers(status);
+
+-- ─── supplier_logs ────────────────────────────────────────────────────────────
+-- Histórico de interações com cada fornecedor.
+CREATE TABLE IF NOT EXISTS supplier_logs (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  supplier_id INTEGER NOT NULL,
+  description TEXT    NOT NULL,
+  occurred_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_supplier_logs_supplier_id ON supplier_logs(supplier_id);
