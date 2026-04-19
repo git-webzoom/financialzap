@@ -86,6 +86,27 @@ async function migrate() {
   // Melhoria 4 — moved_at nos cards do Kanban (NULL = nunca movido; usamos updated_at como fallback no front)
   await addColumnIfMissing(db, 'bm_cards', 'moved_at', 'DATETIME')
 
+  // bm_card_wabas e bm_card_phones — WABAs/números aninhados por card
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS bm_card_wabas (
+      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+      card_id   INTEGER NOT NULL,
+      waba_id   TEXT,
+      waba_name TEXT,
+      FOREIGN KEY (card_id) REFERENCES bm_cards(id) ON DELETE CASCADE
+    )
+  `)
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_bm_card_wabas_card_id ON bm_card_wabas(card_id)`)
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS bm_card_phones (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      card_waba_id INTEGER NOT NULL,
+      phone_number TEXT    NOT NULL,
+      FOREIGN KEY (card_waba_id) REFERENCES bm_card_wabas(id) ON DELETE CASCADE
+    )
+  `)
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_bm_card_phones_waba_id ON bm_card_phones(card_waba_id)`)
+
   console.log('[db] Migration complete.')
 }
 

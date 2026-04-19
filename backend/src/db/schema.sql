@@ -197,6 +197,29 @@ CREATE TABLE IF NOT EXISTS bm_cards (
 CREATE INDEX IF NOT EXISTS idx_bm_cards_user_id   ON bm_cards(user_id);
 CREATE INDEX IF NOT EXISTS idx_bm_cards_column_id ON bm_cards(column_id);
 
+-- ─── bm_card_wabas ────────────────────────────────────────────────────────────
+-- WABAs vinculadas a um card de BM (N:1 com bm_cards).
+CREATE TABLE IF NOT EXISTS bm_card_wabas (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  card_id   INTEGER NOT NULL,
+  waba_id   TEXT,
+  waba_name TEXT,
+  FOREIGN KEY (card_id) REFERENCES bm_cards(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_bm_card_wabas_card_id ON bm_card_wabas(card_id);
+
+-- ─── bm_card_phones ───────────────────────────────────────────────────────────
+-- Números vinculados a cada WABA de um card.
+CREATE TABLE IF NOT EXISTS bm_card_phones (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  card_waba_id INTEGER NOT NULL,
+  phone_number TEXT    NOT NULL,
+  FOREIGN KEY (card_waba_id) REFERENCES bm_card_wabas(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_bm_card_phones_waba_id ON bm_card_phones(card_waba_id);
+
 -- ─── number_inventory ─────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS number_inventory (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -15,6 +15,7 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useKanban } from '../../hooks/useKanban'
+import * as kanbanService from '../../services/kanbanService'
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -84,6 +85,8 @@ function KanbanCard({ card, onEdit, onDelete, isDragging }) {
     opacity: isDragging ? 0.4 : 1,
   }
   const days = daysInStage(card.moved_at)
+  const wabas = card.wabas ?? []
+  const totalPhones = wabas.reduce((s, w) => s + (w.phones?.length ?? 0), 0)
   return (
     <div ref={setNodeRef} style={style} className="kb-card" {...attributes} {...listeners}>
       <div className="kb-card-header">
@@ -93,12 +96,16 @@ function KanbanCard({ card, onEdit, onDelete, isDragging }) {
           <button className="kb-icon-btn kb-icon-btn--danger" onClick={() => onDelete(card.id)} title="Deletar"><IconTrash /></button>
         </div>
       </div>
-      {card.supplier    && <div className="kb-card-row"><span className="kb-card-label">Fornecedor</span><span>{card.supplier}</span></div>}
-      {card.bm_name     && <div className="kb-card-row"><span className="kb-card-label">BM</span><span>{card.bm_name}</span></div>}
-      {card.bm_id       && <div className="kb-card-row"><span className="kb-card-label">BM ID</span><span className="kb-card-mono">{card.bm_id}</span></div>}
-      {card.waba_name   && <div className="kb-card-row"><span className="kb-card-label">WABA</span><span>{card.waba_name}</span></div>}
-      {card.phone_number && <div className="kb-card-row"><span className="kb-card-label">Número</span><span className="kb-card-mono">{card.phone_number}</span></div>}
-      {card.notes       && <div className="kb-card-notes">{card.notes}</div>}
+      {card.supplier && <div className="kb-card-row"><span className="kb-card-label">Fornecedor</span><span>{card.supplier}</span></div>}
+      {card.bm_name  && <div className="kb-card-row"><span className="kb-card-label">BM</span><span>{card.bm_name}</span></div>}
+      {card.bm_id    && <div className="kb-card-row"><span className="kb-card-label">BM ID</span><span className="kb-card-mono">{card.bm_id}</span></div>}
+      {wabas.length > 0 && (
+        <div className="kb-card-row">
+          <span className="kb-card-label">WABAs</span>
+          <span>{wabas.length} WABA{wabas.length !== 1 ? 's' : ''}{totalPhones > 0 ? ` · ${totalPhones} número${totalPhones !== 1 ? 's' : ''}` : ''}</span>
+        </div>
+      )}
+      {card.notes && <div className="kb-card-notes">{card.notes}</div>}
       {days !== null && <div className="kb-card-footer"><DaysIndicator days={days} /></div>}
     </div>
   )
@@ -111,7 +118,6 @@ function KanbanColumn({ column, cards, onAddCard, onEditCard, onDeleteCard, onDe
   const [title, setTitle]     = useState(column.title)
   const inputRef = useRef(null)
 
-  // Register this column as a droppable zone so cards can be dropped into it
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `col-${column.id}` })
 
   useEffect(() => { if (editing) inputRef.current?.focus() }, [editing])
@@ -123,7 +129,6 @@ function KanbanColumn({ column, cards, onAddCard, onEditCard, onDeleteCard, onDe
     setEditing(false)
   }
 
-  // Average days in stage for non-null cards
   const daysValues = cards.map(c => daysInStage(c.moved_at)).filter(d => d !== null)
   const avgDays = daysValues.length > 0 ? Math.round(daysValues.reduce((s, d) => s + d, 0) / daysValues.length) : null
 
@@ -190,11 +195,21 @@ function KanbanColumn({ column, cards, onAddCard, onEditCard, onDeleteCard, onDe
 
 // ─── Card Modal ───────────────────────────────────────────────────────────────
 
-const EMPTY_CARD = { profile_name: '', supplier: '', bm_id: '', bm_name: '', waba_id: '', waba_name: '', phone_number: '', notes: '' }
+const EMPTY_CARD = { profile_name: '', supplier: '', bm_id: '', bm_name: '', notes: '' }
 
-function CardModal({ initial, columnId, onSave, onClose }) {
-  const [form, setForm] = useState(initial ? { ...initial } : { ...EMPTY_CARD, column_id: columnId })
+function CardModal({ initial, columnId, onSave, onCardUpdated, onClose }) {
+  // createdCard: after creation we stay open in edit mode (same pattern as Inventario)
+  const [createdCard, setCreatedCard] = useState(null)
+  const [form, setForm]   = useState(initial ? { ...EMPTY_CARD, ...initial } : { ...EMPTY_CARD })
   const [saving, setSaving] = useState(false)
+
+  const effectiveCard = createdCard ?? initial  // card we use for waba/phone calls
+  const isEdit = !!effectiveCard
+
+  // WABAs state — driven from effectiveCard
+  const [wabas, setWabas] = useState(effectiveCard?.wabas ?? [])
+  const [addingWaba, setAddingWaba]   = useState(false)
+  const [editingWabaId, setEditingWabaId] = useState(null)
 
   function field(key) {
     return (e) => setForm(f => ({ ...f, [key]: e.target.value }))
@@ -204,8 +219,244 @@ function CardModal({ initial, columnId, onSave, onClose }) {
     e.preventDefault()
     setSaving(true)
     try {
+      const saved = await onSave(form)
+      if (!initial && saved) {
+        setCreatedCard(saved)
+        setWabas(saved.wabas ?? [])
+      } else {
+        onClose()
+      }
+    } catch (err) {
+      alert(err.response?.data?.error || err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function notifyUpdate(newWabas) {
+    onCardUpdated?.({ ...effectiveCard, wabas: newWabas })
+  }
+
+  // ── WABA handlers ──
+  async function handleCreateWaba(wabaForm) {
+    const waba = await kanbanService.createWaba(effectiveCard.id, wabaForm)
+    const updated = [...wabas, waba]
+    setWabas(updated)
+    notifyUpdate(updated)
+    setAddingWaba(false)
+  }
+
+  async function handleUpdateWaba(wabaId, wabaForm) {
+    const waba = await kanbanService.updateWaba(effectiveCard.id, wabaId, wabaForm)
+    const updated = wabas.map(w => w.id === wabaId ? { ...waba, phones: w.phones } : w)
+    setWabas(updated)
+    notifyUpdate(updated)
+    setEditingWabaId(null)
+  }
+
+  async function handleDeleteWaba(wabaId) {
+    if (!window.confirm('Remover esta WABA e seus números?')) return
+    await kanbanService.deleteWaba(effectiveCard.id, wabaId)
+    const updated = wabas.filter(w => w.id !== wabaId)
+    setWabas(updated)
+    notifyUpdate(updated)
+  }
+
+  // ── Phone handlers ──
+  async function handleCreatePhone(wabaId, phone) {
+    const p = await kanbanService.createPhone(effectiveCard.id, wabaId, { phone_number: phone })
+    const updated = wabas.map(w => w.id === wabaId ? { ...w, phones: [...(w.phones ?? []), p] } : w)
+    setWabas(updated)
+    notifyUpdate(updated)
+  }
+
+  async function handleDeletePhone(wabaId, phoneId) {
+    await kanbanService.deletePhone(effectiveCard.id, wabaId, phoneId)
+    const updated = wabas.map(w => w.id === wabaId ? { ...w, phones: w.phones.filter(p => p.id !== phoneId) } : w)
+    setWabas(updated)
+    notifyUpdate(updated)
+  }
+
+  return (
+    <div className="kb-modal-backdrop" onClick={onClose}>
+      <div className="kb-modal" onClick={e => e.stopPropagation()}>
+        <div className="kb-modal-header">
+          <span>
+            {createdCard ? `Card criado — ${createdCard.profile_name || 'BM'}` : initial ? 'Editar card' : 'Novo card'}
+          </span>
+          <button className="kb-icon-btn" onClick={onClose}><IconX /></button>
+        </div>
+
+        <form className="kb-modal-form" onSubmit={handleSubmit}>
+          {/* ── Dados básicos ── */}
+          <div className="kb-form-row">
+            <label>Perfil</label>
+            <input value={form.profile_name || ''} onChange={field('profile_name')} placeholder="Nome do perfil" disabled={!!createdCard} />
+          </div>
+          <div className="kb-form-row">
+            <label>Fornecedor</label>
+            <input value={form.supplier || ''} onChange={field('supplier')} placeholder="Fornecedor" disabled={!!createdCard} />
+          </div>
+          <div className="kb-form-2col">
+            <div className="kb-form-row">
+              <label>BM ID</label>
+              <input value={form.bm_id || ''} onChange={field('bm_id')} placeholder="ID da BM" className="kb-mono" disabled={!!createdCard} />
+            </div>
+            <div className="kb-form-row">
+              <label>BM Nome</label>
+              <input value={form.bm_name || ''} onChange={field('bm_name')} placeholder="Nome da BM" disabled={!!createdCard} />
+            </div>
+          </div>
+          <div className="kb-form-row">
+            <label>Observações</label>
+            <textarea value={form.notes || ''} onChange={field('notes')} rows={2} placeholder="Notas livres..." disabled={!!createdCard} />
+          </div>
+
+          {/* ── WABAs — só aparece quando há um card (edit ou recém-criado) ── */}
+          {isEdit && (
+            <div className="kb-waba-section">
+              <div className="kb-waba-section-header">
+                <span>WABAs ({wabas.length})</span>
+                {!addingWaba && (
+                  <button type="button" className="kb-btn kb-btn--ghost kb-btn--sm" onClick={() => setAddingWaba(true)}>
+                    <IconPlus /> Adicionar WABA
+                  </button>
+                )}
+              </div>
+
+              {addingWaba && (
+                <WabaForm
+                  onSave={handleCreateWaba}
+                  onCancel={() => setAddingWaba(false)}
+                />
+              )}
+
+              {wabas.length === 0 && !addingWaba && (
+                <div className="kb-empty-wabas">Nenhuma WABA vinculada.</div>
+              )}
+
+              {wabas.map(w => (
+                <WabaItem
+                  key={w.id}
+                  waba={w}
+                  editing={editingWabaId === w.id}
+                  onEdit={() => setEditingWabaId(editingWabaId === w.id ? null : w.id)}
+                  onSaveEdit={(f) => handleUpdateWaba(w.id, f)}
+                  onCancelEdit={() => setEditingWabaId(null)}
+                  onDelete={() => handleDeleteWaba(w.id)}
+                  onAddPhone={(phone) => handleCreatePhone(w.id, phone)}
+                  onDeletePhone={(pid) => handleDeletePhone(w.id, pid)}
+                />
+              ))}
+            </div>
+          )}
+
+          {!createdCard && (
+            <div className="kb-modal-footer">
+              <button type="button" className="kb-btn kb-btn--ghost" onClick={onClose}>Cancelar</button>
+              <button type="submit" className="kb-btn kb-btn--primary" disabled={saving}>
+                {saving ? 'Salvando…' : 'Salvar'}
+              </button>
+            </div>
+          )}
+          {createdCard && (
+            <div className="kb-modal-footer">
+              <button type="button" className="kb-btn kb-btn--primary" onClick={onClose}>Fechar</button>
+            </div>
+          )}
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ─── WABA item (expanded inside modal) ────────────────────────────────────────
+
+function WabaItem({ waba, editing, onEdit, onSaveEdit, onCancelEdit, onDelete, onAddPhone, onDeletePhone }) {
+  const [newPhone, setNewPhone] = useState('')
+  const [addingPhone, setAddingPhone] = useState(false)
+  const [savingPhone, setSavingPhone] = useState(false)
+
+  async function handleAddPhone(e) {
+    e.preventDefault()
+    if (!newPhone.trim()) return
+    setSavingPhone(true)
+    try {
+      await onAddPhone(newPhone.trim())
+      setNewPhone('')
+      setAddingPhone(false)
+    } catch (err) {
+      alert(err.response?.data?.error || err.message)
+    } finally {
+      setSavingPhone(false)
+    }
+  }
+
+  return (
+    <div className="kb-waba-item">
+      {editing ? (
+        <WabaForm initial={waba} onSave={onSaveEdit} onCancel={onCancelEdit} />
+      ) : (
+        <div className="kb-waba-header">
+          <div className="kb-waba-info">
+            <span className="kb-waba-name">{waba.waba_name || <span style={{ color: '#4a5568' }}>WABA sem nome</span>}</span>
+            {waba.waba_id && <span className="kb-waba-id">{waba.waba_id}</span>}
+          </div>
+          <div className="kb-waba-actions">
+            <button type="button" className="kb-icon-btn" onClick={onEdit} title="Editar WABA"><IconEdit /></button>
+            <button type="button" className="kb-icon-btn kb-icon-btn--danger" onClick={onDelete} title="Remover WABA"><IconTrash /></button>
+          </div>
+        </div>
+      )}
+
+      {/* Phones */}
+      {!editing && (
+        <div className="kb-phones">
+          {(waba.phones ?? []).map(p => (
+            <div key={p.id} className="kb-phone-row">
+              <span className="kb-phone-num">{p.phone_number}</span>
+              <button type="button" className="kb-icon-btn kb-icon-btn--danger" style={{ width: 22, height: 22 }} onClick={() => onDeletePhone(p.id)} title="Remover número">
+                <IconX />
+              </button>
+            </div>
+          ))}
+
+          {addingPhone ? (
+            <form className="kb-phone-add-form" onSubmit={handleAddPhone}>
+              <input
+                className="kb-phone-input"
+                value={newPhone}
+                onChange={e => setNewPhone(e.target.value)}
+                placeholder="+55 11 99999-9999"
+                autoFocus
+              />
+              <button type="submit" className="kb-btn kb-btn--primary kb-btn--sm" disabled={savingPhone || !newPhone.trim()}>
+                {savingPhone ? '…' : 'Add'}
+              </button>
+              <button type="button" className="kb-btn kb-btn--ghost kb-btn--sm" onClick={() => { setAddingPhone(false); setNewPhone('') }}>✕</button>
+            </form>
+          ) : (
+            <button type="button" className="kb-phone-add-btn" onClick={() => setAddingPhone(true)}>
+              <IconPlus /> Adicionar número
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── WABA form ────────────────────────────────────────────────────────────────
+
+function WabaForm({ initial, onSave, onCancel }) {
+  const [form, setForm]     = useState(initial ? { waba_id: initial.waba_id || '', waba_name: initial.waba_name || '' } : { waba_id: '', waba_name: '' })
+  const [saving, setSaving] = useState(false)
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    setSaving(true)
+    try {
       await onSave(form)
-      onClose()
     } catch (err) {
       alert(err.response?.data?.error || err.message)
     } finally {
@@ -214,58 +465,24 @@ function CardModal({ initial, columnId, onSave, onClose }) {
   }
 
   return (
-    <div className="kb-modal-backdrop" onClick={onClose}>
-      <div className="kb-modal" onClick={e => e.stopPropagation()}>
-        <div className="kb-modal-header">
-          <span>{initial ? 'Editar card' : 'Novo card'}</span>
-          <button className="kb-icon-btn" onClick={onClose}><IconX /></button>
+    <form className="kb-waba-form" onSubmit={handleSubmit}>
+      <div className="kb-form-2col">
+        <div className="kb-form-row">
+          <label>WABA ID</label>
+          <input value={form.waba_id} onChange={e => setForm(f => ({ ...f, waba_id: e.target.value }))} placeholder="ID da WABA" className="kb-mono" />
         </div>
-        <form className="kb-modal-form" onSubmit={handleSubmit}>
-          <div className="kb-form-row">
-            <label>Perfil</label>
-            <input value={form.profile_name || ''} onChange={field('profile_name')} placeholder="Nome do perfil" />
-          </div>
-          <div className="kb-form-row">
-            <label>Fornecedor</label>
-            <input value={form.supplier || ''} onChange={field('supplier')} placeholder="Fornecedor" />
-          </div>
-          <div className="kb-form-2col">
-            <div className="kb-form-row">
-              <label>BM ID</label>
-              <input value={form.bm_id || ''} onChange={field('bm_id')} placeholder="ID da BM" className="kb-mono" />
-            </div>
-            <div className="kb-form-row">
-              <label>BM Nome</label>
-              <input value={form.bm_name || ''} onChange={field('bm_name')} placeholder="Nome da BM" />
-            </div>
-          </div>
-          <div className="kb-form-2col">
-            <div className="kb-form-row">
-              <label>WABA ID</label>
-              <input value={form.waba_id || ''} onChange={field('waba_id')} placeholder="ID da WABA" className="kb-mono" />
-            </div>
-            <div className="kb-form-row">
-              <label>WABA Nome</label>
-              <input value={form.waba_name || ''} onChange={field('waba_name')} placeholder="Nome da WABA" />
-            </div>
-          </div>
-          <div className="kb-form-row">
-            <label>Número de Telefone</label>
-            <input value={form.phone_number || ''} onChange={field('phone_number')} placeholder="+55 11 99999-9999" className="kb-mono" />
-          </div>
-          <div className="kb-form-row">
-            <label>Observações</label>
-            <textarea value={form.notes || ''} onChange={field('notes')} rows={3} placeholder="Notas livres..." />
-          </div>
-          <div className="kb-modal-footer">
-            <button type="button" className="kb-btn kb-btn--ghost" onClick={onClose}>Cancelar</button>
-            <button type="submit" className="kb-btn kb-btn--primary" disabled={saving}>
-              {saving ? 'Salvando…' : 'Salvar'}
-            </button>
-          </div>
-        </form>
+        <div className="kb-form-row">
+          <label>WABA Nome</label>
+          <input value={form.waba_name} onChange={e => setForm(f => ({ ...f, waba_name: e.target.value }))} placeholder="Nome da WABA" />
+        </div>
       </div>
-    </div>
+      <div className="kb-waba-form-btns">
+        <button type="submit" className="kb-btn kb-btn--primary kb-btn--sm" disabled={saving}>
+          {saving ? 'Salvando…' : 'Salvar'}
+        </button>
+        <button type="button" className="kb-btn kb-btn--ghost kb-btn--sm" onClick={onCancel}>Cancelar</button>
+      </div>
+    </form>
   )
 }
 
@@ -317,10 +534,15 @@ export default function Kanban() {
 
   async function handleSaveCard(form) {
     if (modal.mode === 'create') {
-      await createCard({ ...form, column_id: modal.columnId })
+      return await createCard({ ...form, column_id: modal.columnId })
     } else {
-      await updateCard(modal.card.id, form)
+      return await updateCard(modal.card.id, form)
     }
+  }
+
+  function handleCardUpdated(updated) {
+    // Sync wabas into the cards list so the card badge reflects changes
+    loadBoard()
   }
 
   function handleDragStart({ active }) {
@@ -335,15 +557,12 @@ export default function Kanban() {
     const overId   = String(over.id)
 
     if (overId.startsWith('col-')) {
-      // Dropped directly on the column droppable zone
       const colId    = Number(overId.replace('col-', ''))
       const colCards = cardsForColumn(colId)
       const dragging = cards.find(c => c.id === cardId)
-      // Skip if same column and already last
       if (dragging && dragging.column_id === colId && colCards.length <= 1) return
       moveCard(cardId, colId, colCards.length)
     } else if (overId.startsWith('card-')) {
-      // Dropped on top of another card
       const overCardId = Number(overId.replace('card-', ''))
       if (cardId === overCardId) return
       const overCard = cards.find(c => c.id === overCardId)
@@ -424,7 +643,8 @@ export default function Kanban() {
           initial={modal.mode === 'edit' ? modal.card : null}
           columnId={modal.columnId}
           onSave={handleSaveCard}
-          onClose={() => setModal(null)}
+          onCardUpdated={handleCardUpdated}
+          onClose={() => { setModal(null); loadBoard() }}
         />
       )}
     </>
@@ -540,6 +760,15 @@ const CSS_STR = `
     padding: 1px 7px;
     flex-shrink: 0;
   }
+  .kb-col-avg {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 1px 6px;
+    background: #1a1f28;
+    border: 1px solid #252c38;
+    border-radius: 8px;
+    flex-shrink: 0;
+  }
   .kb-col-meta-actions { display: flex; gap: 4px; flex-shrink: 0; }
 
   .kb-col-cards {
@@ -623,15 +852,6 @@ const CSS_STR = `
     font-size: 10px;
     font-weight: 500;
   }
-  .kb-col-avg {
-    font-size: 10px;
-    font-weight: 500;
-    padding: 1px 6px;
-    background: #1a1f28;
-    border: 1px solid #252c38;
-    border-radius: 8px;
-    flex-shrink: 0;
-  }
 
   .kb-add-card-btn {
     display: flex;
@@ -690,12 +910,13 @@ const CSS_STR = `
   .kb-btn--primary:hover:not(:disabled) { background: #16a34a; }
   .kb-btn--ghost { background: #1a1f28; color: #8a94a6; border: 1px solid #252c38; }
   .kb-btn--ghost:hover:not(:disabled) { color: #e8edf5; border-color: #374151; }
+  .kb-btn--sm { padding: 5px 10px; font-size: 12px; }
 
   .kb-empty { color: #4a5568; font-size: 14px; padding: 40px 0; }
   .kb-loading { color: #4a5568; font-size: 14px; padding: 40px 0; }
   .kb-error { background: #ef444415; border: 1px solid #ef444435; color: #ef4444; border-radius: 8px; padding: 10px 14px; font-size: 13px; }
 
-  /* Modal */
+  /* ── Modal ── */
   .kb-modal-backdrop {
     position: fixed;
     inset: 0;
@@ -711,7 +932,7 @@ const CSS_STR = `
     border: 1px solid #252c38;
     border-radius: 14px;
     width: 100%;
-    max-width: 500px;
+    max-width: 540px;
     max-height: 90vh;
     overflow-y: auto;
     box-shadow: 0 24px 64px rgba(0,0,0,0.6);
@@ -746,8 +967,9 @@ const CSS_STR = `
   }
   .kb-form-row input:focus,
   .kb-form-row textarea:focus { border-color: #22c55e; }
-  .kb-form-row input.kb-mono,
-  .kb-form-row textarea.kb-mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .kb-form-row input.kb-mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .kb-form-row input:disabled,
+  .kb-form-row textarea:disabled { opacity: 0.5; cursor: default; }
   .kb-form-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .kb-modal-footer {
     display: flex;
@@ -758,4 +980,105 @@ const CSS_STR = `
     margin-top: 4px;
     padding-bottom: 2px;
   }
+
+  /* ── WABAs section ── */
+  .kb-waba-section {
+    border-top: 1px solid #1a2030;
+    padding-top: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .kb-waba-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: #8a94a6;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .kb-empty-wabas { font-size: 12px; color: #4a5568; padding: 6px 0; }
+
+  .kb-waba-item {
+    background: #141820;
+    border: 1px solid #252c38;
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .kb-waba-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .kb-waba-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+  .kb-waba-name { font-size: 13px; font-weight: 600; color: #e8edf5; }
+  .kb-waba-id { font-size: 10px; color: #4a5568; font-family: 'JetBrains Mono', monospace; }
+  .kb-waba-actions { display: flex; gap: 4px; flex-shrink: 0; }
+
+  .kb-waba-form {
+    background: #0f1215;
+    border: 1px solid #252c38;
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .kb-waba-form-btns { display: flex; gap: 6px; }
+
+  /* ── Phones ── */
+  .kb-phones {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #1a2030;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .kb-phone-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .kb-phone-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: #c4cdd8;
+  }
+  .kb-phone-add-form {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .kb-phone-input {
+    flex: 1;
+    background: #1a1f28;
+    border: 1px solid #252c38;
+    border-radius: 6px;
+    color: #e8edf5;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    padding: 5px 9px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .kb-phone-input:focus { border-color: #22c55e; }
+  .kb-phone-add-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: none;
+    border: none;
+    color: #4a5568;
+    font-size: 11px;
+    font-family: inherit;
+    cursor: pointer;
+    padding: 3px 0;
+    transition: color 0.15s;
+  }
+  .kb-phone-add-btn:hover { color: #22c55e; }
 `

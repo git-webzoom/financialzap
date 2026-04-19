@@ -43,19 +43,16 @@ async function updateColumn(userId, columnId, { title, color, position }) {
 
   const current = rows[0]
 
-  // If position is changing, shift other columns to keep consistency
   if (position !== undefined && position !== current.position) {
     const oldPos = current.position
     const newPos = position
     if (newPos > oldPos) {
-      // Moving forward: shift down columns between old+1 and new
       await db.execute({
         sql: `UPDATE kanban_columns SET position = position - 1
               WHERE user_id = ? AND position > ? AND position <= ? AND id != ?`,
         args: [userId, oldPos, newPos, columnId],
       })
     } else {
-      // Moving backward: shift up columns between new and old-1
       await db.execute({
         sql: `UPDATE kanban_columns SET position = position + 1
               WHERE user_id = ? AND position >= ? AND position < ? AND id != ?`,
@@ -108,18 +105,56 @@ async function deleteColumn(userId, columnId) {
 
 // ─── Cards ────────────────────────────────────────────────────────────────────
 
+async function _attachWabas(db, cards) {
+  if (!cards.length) return cards
+  const cardIds = cards.map(c => c.id)
+  const placeholders = cardIds.map(() => '?').join(',')
+
+  const { rows: wabaRows } = await db.execute({
+    sql: `SELECT * FROM bm_card_wabas WHERE card_id IN (${placeholders}) ORDER BY id ASC`,
+    args: cardIds,
+  })
+
+  if (!wabaRows.length) return cards.map(c => ({ ...c, wabas: [] }))
+
+  const wabaIds = wabaRows.map(w => w.id)
+  const wPlaceholders = wabaIds.map(() => '?').join(',')
+  const { rows: phoneRows } = await db.execute({
+    sql: `SELECT * FROM bm_card_phones WHERE card_waba_id IN (${wPlaceholders}) ORDER BY id ASC`,
+    args: wabaIds,
+  })
+
+  const phonesByWaba = {}
+  for (const p of phoneRows) {
+    if (!phonesByWaba[p.card_waba_id]) phonesByWaba[p.card_waba_id] = []
+    phonesByWaba[p.card_waba_id].push({ id: p.id, phone_number: p.phone_number })
+  }
+
+  const wabasByCard = {}
+  for (const w of wabaRows) {
+    if (!wabasByCard[w.card_id]) wabasByCard[w.card_id] = []
+    wabasByCard[w.card_id].push({
+      id: w.id,
+      waba_id: w.waba_id,
+      waba_name: w.waba_name,
+      phones: phonesByWaba[w.id] ?? [],
+    })
+  }
+
+  return cards.map(c => ({ ...c, wabas: wabasByCard[c.id] ?? [] }))
+}
+
 async function listCards(userId) {
   const db = getDb()
   const { rows } = await db.execute({
     sql: 'SELECT * FROM bm_cards WHERE user_id = ? ORDER BY column_id ASC, position ASC',
     args: [userId],
   })
-  return rows
+  return _attachWabas(db, rows)
 }
 
-async function createCard(userId, { column_id, profile_name, supplier, bm_id, bm_name, waba_id, waba_name, phone_number, notes }) {
+async function createCard(userId, { column_id, profile_name, supplier, bm_id, bm_name, notes }) {
   const db = getDb()
-  // Verify column belongs to user
   const { rows: colRows } = await db.execute({
     sql: 'SELECT id FROM kanban_columns WHERE id = ? AND user_id = ?',
     args: [column_id, userId],
@@ -137,15 +172,16 @@ async function createCard(userId, { column_id, profile_name, supplier, bm_id, bm
   const now = new Date().toISOString()
   const { lastInsertRowid } = await db.execute({
     sql: `INSERT INTO bm_cards
-            (user_id, column_id, position, profile_name, supplier, bm_id, bm_name, waba_id, waba_name, phone_number, notes, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [userId, column_id, position, profile_name ?? null, supplier ?? null, bm_id ?? null, bm_name ?? null, waba_id ?? null, waba_name ?? null, phone_number ?? null, notes ?? null, now, now],
+            (user_id, column_id, position, profile_name, supplier, bm_id, bm_name, notes, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [userId, column_id, position, profile_name ?? null, supplier ?? null, bm_id ?? null, bm_name ?? null, notes ?? null, now, now],
   })
   const { rows } = await db.execute({
     sql: 'SELECT * FROM bm_cards WHERE id = ?',
     args: [lastInsertRowid],
   })
-  return rows[0]
+  const [card] = await _attachWabas(db, rows)
+  return card
 }
 
 async function updateCard(userId, cardId, fields) {
@@ -167,16 +203,12 @@ async function updateCard(userId, cardId, fields) {
   const newSupplier    = fields.supplier     !== undefined ? fields.supplier     : current.supplier
   const newBmId        = fields.bm_id        !== undefined ? fields.bm_id        : current.bm_id
   const newBmName      = fields.bm_name      !== undefined ? fields.bm_name      : current.bm_name
-  const newWabaId      = fields.waba_id      !== undefined ? fields.waba_id      : current.waba_id
-  const newWabaName    = fields.waba_name    !== undefined ? fields.waba_name    : current.waba_name
-  const newPhone       = fields.phone_number !== undefined ? fields.phone_number : current.phone_number
   const newNotes       = fields.notes        !== undefined ? fields.notes        : current.notes
 
   const movingColumn = newColumnId !== current.column_id
   const now = new Date().toISOString()
 
   if (movingColumn || fields.position !== undefined) {
-    // Verify destination column belongs to user (if changing)
     if (movingColumn) {
       const { rows: colRows } = await db.execute({
         sql: 'SELECT id FROM kanban_columns WHERE id = ? AND user_id = ?',
@@ -187,20 +219,17 @@ async function updateCard(userId, cardId, fields) {
         err.status = 404
         throw err
       }
-      // Close gap in origin column
       await db.execute({
         sql: `UPDATE bm_cards SET position = position - 1
               WHERE user_id = ? AND column_id = ? AND position > ? AND id != ?`,
         args: [userId, current.column_id, current.position, cardId],
       })
-      // Make room in destination column
       await db.execute({
         sql: `UPDATE bm_cards SET position = position + 1
               WHERE user_id = ? AND column_id = ? AND position >= ?`,
         args: [userId, newColumnId, newPosition],
       })
     } else {
-      // Same column reorder
       const oldPos = current.position
       const pos    = newPosition
       if (pos > oldPos) {
@@ -222,18 +251,18 @@ async function updateCard(userId, cardId, fields) {
   await db.execute({
     sql: `UPDATE bm_cards SET
             column_id = ?, position = ?, profile_name = ?, supplier = ?,
-            bm_id = ?, bm_name = ?, waba_id = ?, waba_name = ?,
-            phone_number = ?, notes = ?, updated_at = ?,
+            bm_id = ?, bm_name = ?, notes = ?, updated_at = ?,
             moved_at = ?
           WHERE id = ? AND user_id = ?`,
-    args: [newColumnId, newPosition, newProfileName, newSupplier, newBmId, newBmName, newWabaId, newWabaName, newPhone, newNotes, now, movingColumn ? now : (current.moved_at ?? now), cardId, userId],
+    args: [newColumnId, newPosition, newProfileName, newSupplier, newBmId, newBmName, newNotes, now, movingColumn ? now : (current.moved_at ?? null), cardId, userId],
   })
 
   const { rows: updated } = await db.execute({
     sql: 'SELECT * FROM bm_cards WHERE id = ?',
     args: [cardId],
   })
-  return updated[0]
+  const [card] = await _attachWabas(db, updated)
+  return card
 }
 
 async function deleteCard(userId, cardId) {
@@ -248,7 +277,6 @@ async function deleteCard(userId, cardId) {
     throw err
   }
   const card = rows[0]
-  // Close gap in column
   await db.execute({
     sql: `UPDATE bm_cards SET position = position - 1
           WHERE user_id = ? AND column_id = ? AND position > ?`,
@@ -260,4 +288,107 @@ async function deleteCard(userId, cardId) {
   })
 }
 
-module.exports = { listColumns, createColumn, updateColumn, deleteColumn, listCards, createCard, updateCard, deleteCard }
+// ─── Card WABAs ───────────────────────────────────────────────────────────────
+
+async function assertCardOwnership(db, userId, cardId) {
+  const { rows } = await db.execute({
+    sql: 'SELECT id FROM bm_cards WHERE id = ? AND user_id = ?',
+    args: [cardId, userId],
+  })
+  if (!rows.length) {
+    const err = new Error('Card não encontrado')
+    err.status = 404
+    throw err
+  }
+}
+
+async function createWaba(userId, cardId, { waba_id, waba_name }) {
+  const db = getDb()
+  await assertCardOwnership(db, userId, cardId)
+  const { lastInsertRowid } = await db.execute({
+    sql: 'INSERT INTO bm_card_wabas (card_id, waba_id, waba_name) VALUES (?, ?, ?)',
+    args: [cardId, waba_id ?? null, waba_name ?? null],
+  })
+  const { rows } = await db.execute({
+    sql: 'SELECT * FROM bm_card_wabas WHERE id = ?',
+    args: [lastInsertRowid],
+  })
+  return { ...rows[0], phones: [] }
+}
+
+async function updateWaba(userId, cardId, wabaId, { waba_id, waba_name }) {
+  const db = getDb()
+  await assertCardOwnership(db, userId, cardId)
+  const { rows } = await db.execute({
+    sql: 'SELECT * FROM bm_card_wabas WHERE id = ? AND card_id = ?',
+    args: [wabaId, cardId],
+  })
+  if (!rows.length) {
+    const err = new Error('WABA não encontrada')
+    err.status = 404
+    throw err
+  }
+  const cur = rows[0]
+  await db.execute({
+    sql: 'UPDATE bm_card_wabas SET waba_id = ?, waba_name = ? WHERE id = ?',
+    args: [waba_id ?? cur.waba_id, waba_name ?? cur.waba_name, wabaId],
+  })
+  const { rows: updated } = await db.execute({ sql: 'SELECT * FROM bm_card_wabas WHERE id = ?', args: [wabaId] })
+  const { rows: phones } = await db.execute({ sql: 'SELECT * FROM bm_card_phones WHERE card_waba_id = ?', args: [wabaId] })
+  return { ...updated[0], phones: phones.map(p => ({ id: p.id, phone_number: p.phone_number })) }
+}
+
+async function deleteWaba(userId, cardId, wabaId) {
+  const db = getDb()
+  await assertCardOwnership(db, userId, cardId)
+  const { rows } = await db.execute({
+    sql: 'SELECT id FROM bm_card_wabas WHERE id = ? AND card_id = ?',
+    args: [wabaId, cardId],
+  })
+  if (!rows.length) {
+    const err = new Error('WABA não encontrada')
+    err.status = 404
+    throw err
+  }
+  await db.execute({ sql: 'DELETE FROM bm_card_wabas WHERE id = ?', args: [wabaId] })
+}
+
+// ─── Card Phones ──────────────────────────────────────────────────────────────
+
+async function createPhone(userId, cardId, wabaId, { phone_number }) {
+  const db = getDb()
+  await assertCardOwnership(db, userId, cardId)
+  if (!phone_number) {
+    const err = new Error('phone_number é obrigatório')
+    err.status = 400
+    throw err
+  }
+  const { rows: wabaRows } = await db.execute({
+    sql: 'SELECT id FROM bm_card_wabas WHERE id = ? AND card_id = ?',
+    args: [wabaId, cardId],
+  })
+  if (!wabaRows.length) {
+    const err = new Error('WABA não encontrada')
+    err.status = 404
+    throw err
+  }
+  const { lastInsertRowid } = await db.execute({
+    sql: 'INSERT INTO bm_card_phones (card_waba_id, phone_number) VALUES (?, ?)',
+    args: [wabaId, phone_number],
+  })
+  const { rows } = await db.execute({ sql: 'SELECT * FROM bm_card_phones WHERE id = ?', args: [lastInsertRowid] })
+  return { id: rows[0].id, phone_number: rows[0].phone_number }
+}
+
+async function deletePhone(userId, cardId, wabaId, phoneId) {
+  const db = getDb()
+  await assertCardOwnership(db, userId, cardId)
+  await db.execute({ sql: 'DELETE FROM bm_card_phones WHERE id = ? AND card_waba_id = ?', args: [phoneId, wabaId] })
+}
+
+module.exports = {
+  listColumns, createColumn, updateColumn, deleteColumn,
+  listCards, createCard, updateCard, deleteCard,
+  createWaba, updateWaba, deleteWaba,
+  createPhone, deletePhone,
+}

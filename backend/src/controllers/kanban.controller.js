@@ -80,4 +80,58 @@ async function deleteCard(req, res) {
   }
 }
 
-module.exports = { listColumns, createColumn, updateColumn, deleteColumn, listCards, createCard, updateCard, deleteCard }
+// ─── Card WABAs ───────────────────────────────────────────────────────────────
+
+async function createWaba(req, res) {
+  try {
+    const waba = await kanban.createWaba(req.user.sub, Number(req.params.cardId), req.body)
+    res.status(201).json({ waba })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message })
+  }
+}
+
+async function updateWaba(req, res) {
+  try {
+    const waba = await kanban.updateWaba(req.user.sub, Number(req.params.cardId), Number(req.params.wabaId), req.body)
+    res.json({ waba })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message })
+  }
+}
+
+async function deleteWaba(req, res) {
+  try {
+    await kanban.deleteWaba(req.user.sub, Number(req.params.cardId), Number(req.params.wabaId))
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message })
+  }
+}
+
+// ─── Card Phones ──────────────────────────────────────────────────────────────
+
+async function createPhone(req, res) {
+  try {
+    const phone = await kanban.createPhone(req.user.sub, Number(req.params.cardId), Number(req.params.wabaId), req.body)
+    res.status(201).json({ phone })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message })
+  }
+}
+
+async function deletePhone(req, res) {
+  try {
+    await kanban.deletePhone(req.user.sub, Number(req.params.cardId), Number(req.params.wabaId), Number(req.params.phoneId))
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message })
+  }
+}
+
+module.exports = {
+  listColumns, createColumn, updateColumn, deleteColumn,
+  listCards, createCard, updateCard, deleteCard,
+  createWaba, updateWaba, deleteWaba,
+  createPhone, deletePhone,
+}
