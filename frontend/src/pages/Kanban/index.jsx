@@ -1011,6 +1011,10 @@ const CSS_STR = `
     gap: 8px;
     min-height: 0;
   }
+  .kb-col-cards::-webkit-scrollbar { width: 4px; }
+  .kb-col-cards::-webkit-scrollbar-track { background: transparent; }
+  .kb-col-cards::-webkit-scrollbar-thumb { background: #252c38; border-radius: 2px; }
+  .kb-col-cards::-webkit-scrollbar-thumb:hover { background: #374151; }
 
   .kb-card {
     background: #141820;
