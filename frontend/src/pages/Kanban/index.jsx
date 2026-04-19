@@ -90,14 +90,18 @@ function KanbanCard({ card, onEdit, onDelete, isDragging }) {
   return (
     <div ref={setNodeRef} style={style} className="kb-card" {...attributes} {...listeners}>
       <div className="kb-card-header">
-        <span className="kb-card-name">{card.profile_name || '—'}</span>
+        <div className="kb-card-title-block">
+          <span className="kb-card-name">{card.bm_name || card.profile_name || '—'}</span>
+          {card.bm_name && card.profile_name && (
+            <span className="kb-card-sub">{card.profile_name}</span>
+          )}
+        </div>
         <div className="kb-card-actions" onClick={e => e.stopPropagation()}>
           <button className="kb-icon-btn" onClick={() => onEdit(card)} title="Editar"><IconEdit /></button>
           <button className="kb-icon-btn kb-icon-btn--danger" onClick={() => onDelete(card.id)} title="Deletar"><IconTrash /></button>
         </div>
       </div>
       {card.supplier && <div className="kb-card-row"><span className="kb-card-label">Fornecedor</span><span>{card.supplier}</span></div>}
-      {card.bm_name  && <div className="kb-card-row"><span className="kb-card-label">BM</span><span>{card.bm_name}</span></div>}
       {card.bm_id    && <div className="kb-card-row"><span className="kb-card-label">BM ID</span><span className="kb-card-mono">{card.bm_id}</span></div>}
       {wabas.length > 0 && (
         <div className="kb-card-row">
@@ -619,7 +623,7 @@ export default function Kanban() {
             <DragOverlay>
               {activeCard && (
                 <div className="kb-card kb-card--dragging">
-                  <span className="kb-card-name">{activeCard.profile_name || '—'}</span>
+                  <span className="kb-card-name">{activeCard.bm_name || activeCard.profile_name || '—'}</span>
                 </div>
               )}
             </DragOverlay>
@@ -790,12 +794,28 @@ const CSS_STR = `
     gap: 8px;
     margin-bottom: 6px;
   }
+  .kb-card-title-block {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+  }
   .kb-card-name {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     color: #e8edf5;
     line-height: 1.3;
-    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .kb-card-sub {
+    font-size: 11px;
+    color: #4a5568;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .kb-card-actions {
     display: flex;
