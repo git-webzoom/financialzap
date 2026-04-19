@@ -1020,8 +1020,7 @@ const CSS_STR = `
     cursor: grab;
     transition: border-color 0.15s, box-shadow 0.15s;
     user-select: none;
-    min-width: 0;
-    overflow: hidden;
+    flex-shrink: 0;
     word-break: break-word;
     overflow-wrap: break-word;
   }
