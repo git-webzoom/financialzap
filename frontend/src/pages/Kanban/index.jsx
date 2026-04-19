@@ -213,8 +213,7 @@ function CardModal({ initial, columnId, onSave, onCardUpdated, onClose }) {
     return (e) => setForm(f => ({ ...f, [key]: e.target.value }))
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault()
+  async function handleSubmit() {
     setSaving(true)
     try {
       const saved = await onSave(form)
@@ -283,7 +282,7 @@ function CardModal({ initial, columnId, onSave, onCardUpdated, onClose }) {
           <button className="kb-icon-btn" onClick={onClose}><IconX /></button>
         </div>
 
-        <form className="kb-modal-form" onSubmit={handleSubmit}>
+        <div className="kb-modal-body">
           {/* ── Dados básicos ── */}
           <div className="kb-form-row">
             <label>Perfil</label>
@@ -312,7 +311,7 @@ function CardModal({ initial, columnId, onSave, onCardUpdated, onClose }) {
             <button type="button" className="kb-btn kb-btn--ghost" onClick={onClose}>
               {basicSaved ? 'Fechar' : 'Cancelar'}
             </button>
-            <button type="submit" className="kb-btn kb-btn--primary" disabled={saving}>
+            <button type="button" className="kb-btn kb-btn--primary" disabled={saving} onClick={handleSubmit}>
               {saving ? 'Salvando…' : basicSaved ? 'Atualizar dados' : 'Salvar e continuar'}
             </button>
           </div>
@@ -355,7 +354,7 @@ function CardModal({ initial, columnId, onSave, onCardUpdated, onClose }) {
               ))}
             </div>
           )}
-        </form>
+        </div>
       </div>
     </div>
   )
@@ -443,8 +442,7 @@ function WabaForm({ initial, onSave, onCancel }) {
   const [form, setForm]     = useState(initial ? { waba_id: initial.waba_id || '', waba_name: initial.waba_name || '' } : { waba_id: '', waba_name: '' })
   const [saving, setSaving] = useState(false)
 
-  async function handleSubmit(e) {
-    e.preventDefault()
+  async function handleSave() {
     setSaving(true)
     try {
       await onSave(form)
@@ -456,7 +454,7 @@ function WabaForm({ initial, onSave, onCancel }) {
   }
 
   return (
-    <form className="kb-waba-form" onSubmit={handleSubmit}>
+    <div className="kb-waba-form">
       <div className="kb-form-2col">
         <div className="kb-form-row">
           <label>WABA ID</label>
@@ -468,12 +466,12 @@ function WabaForm({ initial, onSave, onCancel }) {
         </div>
       </div>
       <div className="kb-waba-form-btns">
-        <button type="submit" className="kb-btn kb-btn--primary kb-btn--sm" disabled={saving}>
+        <button type="button" className="kb-btn kb-btn--primary kb-btn--sm" disabled={saving} onClick={handleSave}>
           {saving ? 'Salvando…' : 'Salvar'}
         </button>
         <button type="button" className="kb-btn kb-btn--ghost kb-btn--sm" onClick={onCancel}>Cancelar</button>
       </div>
-    </form>
+    </div>
   )
 }
 
@@ -940,7 +938,7 @@ const CSS_STR = `
     font-weight: 600;
     color: #e8edf5;
   }
-  .kb-modal-form { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .kb-modal-body { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
   .kb-form-row { display: flex; flex-direction: column; gap: 5px; }
   .kb-form-row label { font-size: 11px; color: #8a94a6; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
   .kb-form-row input,

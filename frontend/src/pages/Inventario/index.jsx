@@ -157,8 +157,8 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
     return (e) => setForm(f => ({ ...f, [key]: e.target.value }))
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault()
+  async function handleSubmit() {
+    if (!form.phone_number?.trim()) { alert('Número de telefone é obrigatório'); return }
     setSaving(true)
     try {
       const saved = await onSave(form)
@@ -211,7 +211,8 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
           </span>
           <button className="inv-icon-btn" onClick={onClose}><IconX /></button>
         </div>
-        <form className="inv-modal-form" onSubmit={handleSubmit}>
+
+        <div className="inv-modal-body">
           {/* Banner de sucesso após criar — substitui os campos */}
           {createdNumber ? (
             <div className="inv-created-banner">
@@ -222,12 +223,12 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
             <>
               <div className="inv-form-row">
                 <label>Número de Telefone *</label>
-                <input value={form.phone_number} onChange={field('phone_number')} placeholder="+55 11 99999-9999" className="inv-mono" required />
+                <input value={form.phone_number} onChange={field('phone_number')} placeholder="+55 11 99999-9999" className="inv-mono" />
               </div>
               <div className="inv-form-2col">
                 <div className="inv-form-row">
                   <label>Origem *</label>
-                  <select value={form.origin} onChange={field('origin')} required>
+                  <select value={form.origin} onChange={field('origin')}>
                     <option value="own">Próprio</option>
                     <option value="rented">Alugado</option>
                   </select>
@@ -279,6 +280,13 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
               <div className="inv-form-row">
                 <label>Observações</label>
                 <textarea value={form.notes || ''} onChange={field('notes')} rows={3} placeholder="Notas livres..." />
+              </div>
+
+              <div className="inv-modal-footer">
+                <button type="button" className="inv-btn inv-btn--ghost" onClick={onClose}>Cancelar</button>
+                <button type="button" className="inv-btn inv-btn--primary" disabled={saving} onClick={handleSubmit}>
+                  {saving ? 'Salvando…' : isEdit ? 'Salvar' : 'Salvar e adicionar automações'}
+                </button>
               </div>
             </>
           )}
@@ -339,23 +347,13 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
                   </tbody>
                 </table>
               )}
-            </div>
-          )}
 
-          {!createdNumber && (
-            <div className="inv-modal-footer">
-              <button type="button" className="inv-btn inv-btn--ghost" onClick={onClose}>Cancelar</button>
-              <button type="submit" className="inv-btn inv-btn--primary" disabled={saving}>
-                {saving ? 'Salvando…' : 'Salvar'}
-              </button>
+              <div className="inv-modal-footer" style={{ marginTop: 8 }}>
+                <button type="button" className="inv-btn inv-btn--primary" onClick={onClose}>Fechar</button>
+              </div>
             </div>
           )}
-          {createdNumber && (
-            <div className="inv-modal-footer">
-              <button type="button" className="inv-btn inv-btn--primary" onClick={onClose}>Fechar</button>
-            </div>
-          )}
-        </form>
+        </div>
       </div>
     </div>
   )
@@ -370,8 +368,7 @@ function AutoForm({ initial, onSave, onCancel }) {
   )
   const [saving, setSaving] = useState(false)
 
-  async function handleSubmit(e) {
-    e.preventDefault()
+  async function handleSave() {
     if (!form.automation_name.trim() || !form.template_name.trim()) return
     setSaving(true)
     try {
@@ -384,21 +381,19 @@ function AutoForm({ initial, onSave, onCancel }) {
   }
 
   return (
-    <form className="auto-form" onSubmit={handleSubmit}>
+    <div className="auto-form">
       <div className="auto-form-row3">
         <input
           className="auto-input"
           value={form.automation_name}
           onChange={e => setForm(f => ({ ...f, automation_name: e.target.value }))}
           placeholder="Nome da automação *"
-          required
         />
         <input
           className="auto-input"
           value={form.template_name}
           onChange={e => setForm(f => ({ ...f, template_name: e.target.value }))}
           placeholder="Nome do template *"
-          required
         />
         <input
           className="auto-input"
@@ -410,12 +405,12 @@ function AutoForm({ initial, onSave, onCancel }) {
         />
       </div>
       <div className="auto-form-btns">
-        <button type="submit" className="inv-btn inv-btn--primary inv-btn--sm" disabled={saving || !form.automation_name.trim() || !form.template_name.trim()}>
+        <button type="button" className="inv-btn inv-btn--primary inv-btn--sm" disabled={saving || !form.automation_name.trim() || !form.template_name.trim()} onClick={handleSave}>
           {saving ? 'Salvando…' : 'Salvar'}
         </button>
         <button type="button" className="inv-btn inv-btn--ghost inv-btn--sm" onClick={onCancel}>Cancelar</button>
       </div>
-    </form>
+    </div>
   )
 }
 
@@ -1135,7 +1130,7 @@ const CSS_STR = `
     font-weight: 600;
     color: #e8edf5;
   }
-  .inv-modal-form { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .inv-modal-body { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
   .inv-form-row { display: flex; flex-direction: column; gap: 5px; }
   .inv-form-row label { font-size: 11px; color: #8a94a6; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
   .inv-form-row input,
