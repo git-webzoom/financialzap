@@ -46,6 +46,20 @@ async function migrate() {
   // Índice para lookup de wamid no webhook (idempotente via IF NOT EXISTS)
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_campaign_contacts_wamid ON campaign_contacts(wamid)`)
 
+  // number_automations — tabela de automações por número (N:1 com number_inventory)
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS number_automations (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      number_id       INTEGER NOT NULL,
+      automation_name TEXT    NOT NULL,
+      template_name   TEXT,
+      created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (number_id) REFERENCES number_inventory(id) ON DELETE CASCADE
+    )
+  `)
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_number_automations_number_id ON number_automations(number_id)`)
+
   console.log('[db] Migration complete.')
 }
 

@@ -199,21 +199,35 @@ CREATE INDEX IF NOT EXISTS idx_bm_cards_column_id ON bm_cards(column_id);
 
 -- ─── number_inventory ─────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS number_inventory (
-  id              INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id         INTEGER NOT NULL,
-  phone_number    TEXT    NOT NULL,
-  origin          TEXT    NOT NULL CHECK (origin IN ('own', 'rented')),
-  supplier        TEXT,
-  bm_name         TEXT,
-  waba_name       TEXT,
-  automation_name TEXT,
-  status          TEXT    NOT NULL DEFAULT 'free' CHECK (status IN ('free', 'in_use', 'reserved')),
-  notes           TEXT,
-  created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id      INTEGER NOT NULL,
+  phone_number TEXT    NOT NULL,
+  origin       TEXT    NOT NULL CHECK (origin IN ('own', 'rented')),
+  supplier     TEXT,
+  bm_name      TEXT,
+  waba_name    TEXT,
+  status       TEXT    NOT NULL DEFAULT 'free' CHECK (status IN ('free', 'in_use', 'reserved')),
+  notes        TEXT,
+  created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_number_inventory_user_id ON number_inventory(user_id);
 CREATE INDEX IF NOT EXISTS idx_number_inventory_status  ON number_inventory(status);
 CREATE INDEX IF NOT EXISTS idx_number_inventory_origin  ON number_inventory(origin);
+
+-- ─── number_automations ───────────────────────────────────────────────────────
+-- Automações vinculadas a um número do inventário.
+-- Um número pode ter N automações, cada uma com seu próprio template.
+CREATE TABLE IF NOT EXISTS number_automations (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  number_id       INTEGER NOT NULL,
+  automation_name TEXT    NOT NULL,
+  template_name   TEXT,
+  created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (number_id) REFERENCES number_inventory(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_number_automations_number_id ON number_automations(number_id);

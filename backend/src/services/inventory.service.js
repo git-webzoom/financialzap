@@ -1,5 +1,7 @@
 const { getDb } = require('../db/database')
 
+// ─── Numbers ──────────────────────────────────────────────────────────────────
+
 async function listNumbers(userId, filters = {}) {
   const db = getDb()
   let sql  = 'SELECT * FROM number_inventory WHERE user_id = ?'
@@ -16,10 +18,27 @@ async function listNumbers(userId, filters = {}) {
 
   sql += ' ORDER BY created_at DESC'
   const { rows } = await db.execute({ sql, args })
-  return rows
+
+  // Attach automations to each number
+  const { rows: autoRows } = await db.execute({
+    sql: `SELECT na.id, na.number_id, na.automation_name, na.template_name
+          FROM number_automations na
+          JOIN number_inventory ni ON ni.id = na.number_id
+          WHERE ni.user_id = ?
+          ORDER BY na.created_at ASC`,
+    args: [userId],
+  })
+
+  const autosByNumber = {}
+  for (const a of autoRows) {
+    if (!autosByNumber[a.number_id]) autosByNumber[a.number_id] = []
+    autosByNumber[a.number_id].push({ id: a.id, automation_name: a.automation_name, template_name: a.template_name })
+  }
+
+  return rows.map(r => ({ ...r, automations: autosByNumber[r.id] ?? [] }))
 }
 
-async function createNumber(userId, { phone_number, origin, supplier, bm_name, waba_name, automation_name, status, notes }) {
+async function createNumber(userId, { phone_number, origin, supplier, bm_name, waba_name, status, notes }) {
   const db = getDb()
   if (!phone_number) {
     const err = new Error('phone_number é obrigatório')
@@ -40,15 +59,15 @@ async function createNumber(userId, { phone_number, origin, supplier, bm_name, w
   const now = new Date().toISOString()
   const { lastInsertRowid } = await db.execute({
     sql: `INSERT INTO number_inventory
-            (user_id, phone_number, origin, supplier, bm_name, waba_name, automation_name, status, notes, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [userId, phone_number, origin, supplier ?? null, bm_name ?? null, waba_name ?? null, automation_name ?? null, resolvedStatus, notes ?? null, now, now],
+            (user_id, phone_number, origin, supplier, bm_name, waba_name, status, notes, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [userId, phone_number, origin, supplier ?? null, bm_name ?? null, waba_name ?? null, resolvedStatus, notes ?? null, now, now],
   })
   const { rows } = await db.execute({
     sql: 'SELECT * FROM number_inventory WHERE id = ?',
     args: [lastInsertRowid],
   })
-  return rows[0]
+  return { ...rows[0], automations: [] }
 }
 
 async function updateNumber(userId, numberId, fields) {
@@ -65,28 +84,31 @@ async function updateNumber(userId, numberId, fields) {
   const current = rows[0]
   const now = new Date().toISOString()
 
-  const newPhone       = fields.phone_number    !== undefined ? fields.phone_number    : current.phone_number
-  const newOrigin      = fields.origin          !== undefined ? fields.origin          : current.origin
-  const newSupplier    = fields.supplier        !== undefined ? fields.supplier        : current.supplier
-  const newBmName      = fields.bm_name         !== undefined ? fields.bm_name         : current.bm_name
-  const newWabaName    = fields.waba_name       !== undefined ? fields.waba_name       : current.waba_name
-  const newAutoName    = fields.automation_name !== undefined ? fields.automation_name : current.automation_name
-  const newStatus      = fields.status          !== undefined ? fields.status          : current.status
-  const newNotes       = fields.notes           !== undefined ? fields.notes           : current.notes
+  const newPhone    = fields.phone_number !== undefined ? fields.phone_number : current.phone_number
+  const newOrigin   = fields.origin       !== undefined ? fields.origin       : current.origin
+  const newSupplier = fields.supplier     !== undefined ? fields.supplier     : current.supplier
+  const newBmName   = fields.bm_name      !== undefined ? fields.bm_name      : current.bm_name
+  const newWabaName = fields.waba_name    !== undefined ? fields.waba_name    : current.waba_name
+  const newStatus   = fields.status       !== undefined ? fields.status       : current.status
+  const newNotes    = fields.notes        !== undefined ? fields.notes        : current.notes
 
   await db.execute({
     sql: `UPDATE number_inventory SET
             phone_number = ?, origin = ?, supplier = ?, bm_name = ?, waba_name = ?,
-            automation_name = ?, status = ?, notes = ?, updated_at = ?
+            status = ?, notes = ?, updated_at = ?
           WHERE id = ? AND user_id = ?`,
-    args: [newPhone, newOrigin, newSupplier, newBmName, newWabaName, newAutoName, newStatus, newNotes, now, numberId, userId],
+    args: [newPhone, newOrigin, newSupplier, newBmName, newWabaName, newStatus, newNotes, now, numberId, userId],
   })
 
   const { rows: updated } = await db.execute({
     sql: 'SELECT * FROM number_inventory WHERE id = ?',
     args: [numberId],
   })
-  return updated[0]
+  const { rows: autoRows } = await db.execute({
+    sql: 'SELECT id, automation_name, template_name FROM number_automations WHERE number_id = ? ORDER BY created_at ASC',
+    args: [numberId],
+  })
+  return { ...updated[0], automations: autoRows }
 }
 
 async function deleteNumber(userId, numberId) {
@@ -106,4 +128,78 @@ async function deleteNumber(userId, numberId) {
   })
 }
 
-module.exports = { listNumbers, createNumber, updateNumber, deleteNumber }
+// ─── Automations ──────────────────────────────────────────────────────────────
+
+async function listAutomations(numberId) {
+  const db = getDb()
+  const { rows } = await db.execute({
+    sql: 'SELECT id, automation_name, template_name, created_at, updated_at FROM number_automations WHERE number_id = ? ORDER BY created_at ASC',
+    args: [numberId],
+  })
+  return rows
+}
+
+async function createAutomation(numberId, { automation_name, template_name }) {
+  const db = getDb()
+  if (!automation_name) {
+    const err = new Error('automation_name é obrigatório')
+    err.status = 400
+    throw err
+  }
+  const now = new Date().toISOString()
+  const { lastInsertRowid } = await db.execute({
+    sql: 'INSERT INTO number_automations (number_id, automation_name, template_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+    args: [numberId, automation_name, template_name ?? null, now, now],
+  })
+  const { rows } = await db.execute({
+    sql: 'SELECT * FROM number_automations WHERE id = ?',
+    args: [lastInsertRowid],
+  })
+  return rows[0]
+}
+
+async function updateAutomation(automationId, { automation_name, template_name }) {
+  const db = getDb()
+  const { rows } = await db.execute({
+    sql: 'SELECT * FROM number_automations WHERE id = ?',
+    args: [automationId],
+  })
+  if (!rows.length) {
+    const err = new Error('Automação não encontrada')
+    err.status = 404
+    throw err
+  }
+  const current = rows[0]
+  const now = new Date().toISOString()
+  const newName     = automation_name !== undefined ? automation_name : current.automation_name
+  const newTemplate = template_name   !== undefined ? template_name   : current.template_name
+
+  await db.execute({
+    sql: 'UPDATE number_automations SET automation_name = ?, template_name = ?, updated_at = ? WHERE id = ?',
+    args: [newName, newTemplate, now, automationId],
+  })
+  const { rows: updated } = await db.execute({
+    sql: 'SELECT * FROM number_automations WHERE id = ?',
+    args: [automationId],
+  })
+  return updated[0]
+}
+
+async function deleteAutomation(automationId) {
+  const db = getDb()
+  const { rows } = await db.execute({
+    sql: 'SELECT id FROM number_automations WHERE id = ?',
+    args: [automationId],
+  })
+  if (!rows.length) {
+    const err = new Error('Automação não encontrada')
+    err.status = 404
+    throw err
+  }
+  await db.execute({
+    sql: 'DELETE FROM number_automations WHERE id = ?',
+    args: [automationId],
+  })
+}
+
+module.exports = { listNumbers, createNumber, updateNumber, deleteNumber, listAutomations, createAutomation, updateAutomation, deleteAutomation }

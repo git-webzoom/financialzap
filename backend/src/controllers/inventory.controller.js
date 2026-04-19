@@ -1,4 +1,21 @@
 const inventory = require('../services/inventory.service')
+const { getDb } = require('../db/database')
+
+// ─── Helper: verify number belongs to user ────────────────────────────────────
+async function assertNumberOwnership(userId, numberId) {
+  const db = getDb()
+  const { rows } = await db.execute({
+    sql: 'SELECT id FROM number_inventory WHERE id = ? AND user_id = ?',
+    args: [numberId, userId],
+  })
+  if (!rows.length) {
+    const err = new Error('Número não encontrado')
+    err.status = 404
+    throw err
+  }
+}
+
+// ─── Numbers ──────────────────────────────────────────────────────────────────
 
 async function listNumbers(req, res) {
   try {
@@ -37,4 +54,52 @@ async function deleteNumber(req, res) {
   }
 }
 
-module.exports = { listNumbers, createNumber, updateNumber, deleteNumber }
+// ─── Automations ──────────────────────────────────────────────────────────────
+
+async function listAutomations(req, res) {
+  try {
+    const numberId = Number(req.params.numberId)
+    await assertNumberOwnership(req.user.sub, numberId)
+    const data = await inventory.listAutomations(numberId)
+    res.json({ automations: data })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message })
+  }
+}
+
+async function createAutomation(req, res) {
+  try {
+    const numberId = Number(req.params.numberId)
+    await assertNumberOwnership(req.user.sub, numberId)
+    const { automation_name, template_name } = req.body
+    if (!automation_name) return res.status(400).json({ error: 'automation_name é obrigatório' })
+    const auto = await inventory.createAutomation(numberId, { automation_name, template_name })
+    res.status(201).json({ automation: auto })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message })
+  }
+}
+
+async function updateAutomation(req, res) {
+  try {
+    const numberId = Number(req.params.numberId)
+    await assertNumberOwnership(req.user.sub, numberId)
+    const auto = await inventory.updateAutomation(Number(req.params.id), req.body)
+    res.json({ automation: auto })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message })
+  }
+}
+
+async function deleteAutomation(req, res) {
+  try {
+    const numberId = Number(req.params.numberId)
+    await assertNumberOwnership(req.user.sub, numberId)
+    await inventory.deleteAutomation(Number(req.params.id))
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message })
+  }
+}
+
+module.exports = { listNumbers, createNumber, updateNumber, deleteNumber, listAutomations, createAutomation, updateAutomation, deleteAutomation }
