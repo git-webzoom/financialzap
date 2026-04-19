@@ -76,6 +76,8 @@ export default function WabaCard({ waba, phoneNumbers = [], onRevoke, onSync }) 
       if (data.ban_state === 'SCHEDULE_FOR_DISABLE') problems.push('conta agendada para ban')
       if (data.decision === 'REJECTED') problems.push('conta rejeitada pela Meta')
       if (data.account_review_status === 'REJECTED') problems.push('revisão rejeitada')
+      const bmRestrictions = data.bm_restriction_info?.restrictions ?? []
+      if (bmRestrictions.length) problems.push(`BM com ${bmRestrictions.length} restrição(ões)`)
       const badPhones = data.phone_numbers?.filter(p =>
         (p.status && !['CONNECTED'].includes(p.status.toUpperCase())) ||
         p.can_send_message === false ||
@@ -86,7 +88,7 @@ export default function WabaCard({ waba, phoneNumbers = [], onRevoke, onSync }) 
       if (problems.length) {
         setSyncMsg(`⚠ ${problems.join(' · ')}`)
       } else {
-        setSyncMsg('✓ WABA e números sem restrições')
+        setSyncMsg('✓ WABA, BM e números sem restrições')
         setTimeout(() => setSyncMsg(''), 4000)
       }
     } catch (err) {
@@ -190,6 +192,15 @@ export default function WabaCard({ waba, phoneNumbers = [], onRevoke, onSync }) 
             {' '}— Acesse o Business Manager para mais detalhes e contestar a decisão.
           </div>
         )}
+
+        {/* BM restriction alerts */}
+        {(healthData?.bm_restriction_info?.restrictions ?? []).map((r, i) => (
+          <div key={i} className="wc-alert wc-alert--ban">
+            ⛔ Restrição na Business Manager ({healthData.bm_restriction_info.bm_name})
+            {r.restriction_type ? <> — <strong>{r.restriction_type}</strong></> : ''}
+            {r.description ? <>: {r.description}</> : ''}
+          </div>
+        ))}
 
         {/* Phone number restriction alerts */}
         {(healthData?.phone_numbers || [])

@@ -178,12 +178,34 @@ async function getWabaHealth(wabaId, accessToken) {
     },
   })
 
+  // BM-level restriction info — on_behalf_of_business_info contains the BM id for WABAs owned on behalf
+  const bmId = wabaData.on_behalf_of_business_info?.id
+  let bm_restriction_info = null
+  if (bmId) {
+    try {
+      const { data: bmData } = await metaApi.get(`/${bmId}`, {
+        params: {
+          fields: 'id,name,restriction_info',
+          access_token: accessToken,
+        },
+      })
+      bm_restriction_info = {
+        bm_id:            bmData.id,
+        bm_name:          bmData.name,
+        restrictions:     bmData.restriction_info ?? [],
+      }
+    } catch {
+      // BM query may fail if token lacks business_management permission — non-fatal
+    }
+  }
+
   return {
     waba_id:               wabaId,
     waba_name:             wabaData.name,
     account_review_status: wabaData.account_review_status ?? null,
     ban_state:             wabaData.ban_state    ?? null,
     decision:              wabaData.decision     ?? null,
+    bm_restriction_info,
     // Raw WABA data for full inspection
     raw_waba:              wabaData,
     phone_numbers: (phoneData.data || []).map(p => {
