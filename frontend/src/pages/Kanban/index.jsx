@@ -912,12 +912,16 @@ const CSS_STR = `
 
   .kb-col {
     flex: 0 0 280px;
+    width: 280px;
+    min-width: 280px;
+    max-width: 280px;
     background: #0f1215;
     border: 1px solid #252c38;
     border-radius: 12px;
     display: flex;
     flex-direction: column;
     max-height: calc(100vh - 200px);
+    overflow: hidden;
   }
   .kb-col--dragging { opacity: 0.5; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
 
@@ -1016,6 +1020,10 @@ const CSS_STR = `
     cursor: grab;
     transition: border-color 0.15s, box-shadow 0.15s;
     user-select: none;
+    min-width: 0;
+    overflow: hidden;
+    word-break: break-word;
+    overflow-wrap: break-word;
   }
   .kb-card:hover { border-color: #374151; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
   .kb-card--dragging { box-shadow: 0 8px 24px rgba(0,0,0,0.5); border-color: #22c55e; cursor: grabbing; }
@@ -1095,9 +1103,9 @@ const CSS_STR = `
     border-top: 1px solid #1a2030;
     padding-top: 6px;
     line-height: 1.5;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: break-word;
   }
   .kb-card-footer {
     margin-top: 7px;
