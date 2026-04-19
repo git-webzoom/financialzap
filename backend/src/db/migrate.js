@@ -84,7 +84,8 @@ async function migrate() {
   await addColumnIfMissing(db, 'number_automations', 'daily_volume', 'INTEGER DEFAULT 0')
 
   // Melhoria 4 — moved_at nos cards do Kanban (NULL = nunca movido; usamos updated_at como fallback no front)
-  await addColumnIfMissing(db, 'bm_cards', 'moved_at', 'DATETIME')
+  await addColumnIfMissing(db, 'bm_cards', 'moved_at',   'DATETIME')
+  await addColumnIfMissing(db, 'bm_cards', 'bm_status',  'TEXT')
 
   // bm_card_wabas e bm_card_phones — WABAs/números aninhados por card
   await db.execute(`

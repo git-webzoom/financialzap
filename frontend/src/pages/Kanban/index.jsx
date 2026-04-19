@@ -66,6 +66,34 @@ function IconGrip() {
   )
 }
 
+// ─── BM Status badge ─────────────────────────────────────────────────────────
+
+const BM_STATUS_OPTIONS = [
+  { value: '',              label: 'Sem status'     },
+  { value: 'sem_restricao', label: 'Sem Restrição'  },
+  { value: 'com_restricao', label: 'Com Restrição'  },
+  { value: 'banida',        label: 'Banida'         },
+]
+
+const BM_STATUS_STYLE = {
+  sem_restricao: { bg: '#22c55e18', border: '#22c55e50', color: '#22c55e', dot: '#22c55e' },
+  com_restricao: { bg: '#f59e0b18', border: '#f59e0b50', color: '#f59e0b', dot: '#f59e0b' },
+  banida:        { bg: '#ef444418', border: '#ef444450', color: '#ef4444', dot: '#ef4444' },
+}
+
+function BmStatusBadge({ status }) {
+  if (!status) return null
+  const s = BM_STATUS_STYLE[status]
+  if (!s) return null
+  const label = BM_STATUS_OPTIONS.find(o => o.value === status)?.label ?? status
+  return (
+    <span className="kb-status-badge" style={{ background: s.bg, border: `1px solid ${s.border}`, color: s.color }}>
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: s.dot, display: 'inline-block', flexShrink: 0 }} />
+      {label}
+    </span>
+  )
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function daysInStage(movedAt) {
@@ -94,19 +122,27 @@ function DaysIndicator({ days }) {
 
 function KanbanCard({ card, onEdit, onDelete, isDragging }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: `card-${card.id}` })
+  const statusStyle = card.bm_status ? BM_STATUS_STYLE[card.bm_status] : null
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.4 : 1,
+    borderLeftColor: statusStyle ? statusStyle.dot : undefined,
+    borderLeftWidth: statusStyle ? 3 : undefined,
   }
   const days = daysInStage(card.moved_at)
   const wabas = card.wabas ?? []
   const totalPhones = wabas.reduce((s, w) => s + (w.phones?.length ?? 0), 0)
+  const notesPreview = card.notes
+    ? (card.notes.length > 200 ? card.notes.slice(0, 200) + '…' : card.notes)
+    : null
+  const rawTitle = card.bm_name || card.profile_name || '—'
+  const cardTitle = rawTitle.length > 27 ? rawTitle.slice(0, 27) + '…' : rawTitle
   return (
     <div ref={setNodeRef} style={style} className="kb-card" {...attributes} {...listeners}>
       <div className="kb-card-header">
         <div className="kb-card-title-block">
-          <span className="kb-card-name">{card.bm_name || card.profile_name || '—'}</span>
+          <span className="kb-card-name" title={rawTitle}>{cardTitle}</span>
           {card.bm_name && card.profile_name && (
             <span className="kb-card-sub">{card.profile_name}</span>
           )}
@@ -116,6 +152,7 @@ function KanbanCard({ card, onEdit, onDelete, isDragging }) {
           <button className="kb-icon-btn kb-icon-btn--danger" onClick={() => onDelete(card.id)} title="Deletar"><IconTrash /></button>
         </div>
       </div>
+      {card.bm_status && <div style={{ marginBottom: 4 }}><BmStatusBadge status={card.bm_status} /></div>}
       {card.supplier && <div className="kb-card-row"><span className="kb-card-label">Fornecedor</span><span>{card.supplier}</span></div>}
       {card.bm_id    && <div className="kb-card-row"><span className="kb-card-label">BM ID</span><span className="kb-card-mono">{card.bm_id}</span></div>}
       {wabas.length > 0 && (
@@ -124,7 +161,7 @@ function KanbanCard({ card, onEdit, onDelete, isDragging }) {
           <span>{wabas.length} WABA{wabas.length !== 1 ? 's' : ''}{totalPhones > 0 ? ` · ${totalPhones} número${totalPhones !== 1 ? 's' : ''}` : ''}</span>
         </div>
       )}
-      {card.notes && <div className="kb-card-notes">{card.notes}</div>}
+      {notesPreview && <div className="kb-card-notes">{notesPreview}</div>}
       {days !== null && <div className="kb-card-footer"><DaysIndicator days={days} /></div>}
     </div>
   )
@@ -169,9 +206,11 @@ function KanbanColumn({ column, cards, onAddCard, onEditCard, onDeleteCard, onDe
   const daysValues = cards.map(c => daysInStage(c.moved_at)).filter(d => d !== null)
   const avgDays = daysValues.length > 0 ? Math.round(daysValues.reduce((s, d) => s + d, 0) / daysValues.length) : null
 
+  const accentColor = column.color || '#8a94a6'
+
   return (
-    <div ref={mergeRef} style={colStyle} className="kb-col">
-      <div className="kb-col-header">
+    <div ref={mergeRef} style={{ ...colStyle, borderTopColor: accentColor, borderTopWidth: 3 }} className="kb-col">
+      <div className="kb-col-header" style={{ background: `linear-gradient(180deg, ${accentColor}12 0%, transparent 100%)` }}>
         {/* Drag handle for column reorder */}
         <span
           className="kb-col-grip"
@@ -240,7 +279,7 @@ function KanbanColumn({ column, cards, onAddCard, onEditCard, onDeleteCard, onDe
 
 // ─── Card Modal ───────────────────────────────────────────────────────────────
 
-const EMPTY_CARD = { profile_name: '', supplier: '', bm_id: '', bm_name: '', notes: '' }
+const EMPTY_CARD = { profile_name: '', supplier: '', bm_id: '', bm_name: '', notes: '', bm_status: '' }
 
 function CardModal({ initial, columnId, onSave, onCardUpdated, onClose }) {
   // savedCard: set after the first save (create OR edit) — unlocks WABAs section
@@ -259,9 +298,11 @@ function CardModal({ initial, columnId, onSave, onCardUpdated, onClose }) {
   }
 
   async function handleSubmit() {
+    if (saving) return
     setSaving(true)
     try {
-      const saved = await onSave(form)
+      // After first create, savedCard.id exists — always update, never create again
+      const saved = await onSave(form, savedCard?.id)
       if (saved) {
         setSavedCard(saved)
         setWabas(saved.wabas ?? wabas)
@@ -350,6 +391,14 @@ function CardModal({ initial, columnId, onSave, onCardUpdated, onClose }) {
           <div className="kb-form-row">
             <label>Observações</label>
             <textarea value={form.notes || ''} onChange={field('notes')} rows={2} placeholder="Notas livres..." />
+          </div>
+          <div className="kb-form-row">
+            <label>Status da BM</label>
+            <select value={form.bm_status || ''} onChange={field('bm_status')} className="kb-select">
+              {BM_STATUS_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
           </div>
 
           <div className="kb-modal-footer" style={{ marginBottom: basicSaved ? 0 : undefined }}>
@@ -588,7 +637,10 @@ export default function Kanban() {
     try { await deleteCard(id) } catch (err) { alert(err.response?.data?.error || err.message) }
   }
 
-  async function handleSaveCard(form) {
+  async function handleSaveCard(form, savedCardId) {
+    if (savedCardId) {
+      return await updateCard(savedCardId, form)
+    }
     if (modal.mode === 'create') {
       return await createCard({ ...form, column_id: modal.columnId })
     } else {
@@ -1024,6 +1076,18 @@ const CSS_STR = `
     flex-shrink: 0;
   }
   .kb-card-mono { font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+  .kb-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 20px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
   .kb-card-notes {
     margin-top: 7px;
     font-size: 11px;
@@ -1031,7 +1095,9 @@ const CSS_STR = `
     border-top: 1px solid #1a2030;
     padding-top: 6px;
     line-height: 1.5;
-    white-space: pre-wrap;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .kb-card-footer {
     margin-top: 7px;
@@ -1160,6 +1226,25 @@ const CSS_STR = `
   .kb-form-row input.kb-mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
   .kb-form-row input:disabled,
   .kb-form-row textarea:disabled { opacity: 0.5; cursor: default; }
+  .kb-select {
+    background: #1a1f28;
+    border: 1px solid #252c38;
+    border-radius: 7px;
+    color: #e8edf5;
+    font-size: 13px;
+    font-family: inherit;
+    padding: 8px 11px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.15s;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%234a5568' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
+  }
+  .kb-select:focus { border-color: #22c55e; }
+  .kb-select option { background: #1a1f28; }
   .kb-form-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .kb-modal-footer {
     display: flex;

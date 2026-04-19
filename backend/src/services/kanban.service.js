@@ -153,7 +153,7 @@ async function listCards(userId) {
   return _attachWabas(db, rows)
 }
 
-async function createCard(userId, { column_id, profile_name, supplier, bm_id, bm_name, notes }) {
+async function createCard(userId, { column_id, profile_name, supplier, bm_id, bm_name, notes, bm_status }) {
   const db = getDb()
   const { rows: colRows } = await db.execute({
     sql: 'SELECT id FROM kanban_columns WHERE id = ? AND user_id = ?',
@@ -172,9 +172,9 @@ async function createCard(userId, { column_id, profile_name, supplier, bm_id, bm
   const now = new Date().toISOString()
   const { lastInsertRowid } = await db.execute({
     sql: `INSERT INTO bm_cards
-            (user_id, column_id, position, profile_name, supplier, bm_id, bm_name, notes, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [userId, column_id, position, profile_name ?? null, supplier ?? null, bm_id ?? null, bm_name ?? null, notes ?? null, now, now],
+            (user_id, column_id, position, profile_name, supplier, bm_id, bm_name, notes, bm_status, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [userId, column_id, position, profile_name ?? null, supplier ?? null, bm_id ?? null, bm_name ?? null, notes ?? null, bm_status ?? null, now, now],
   })
   const { rows } = await db.execute({
     sql: 'SELECT * FROM bm_cards WHERE id = ?',
@@ -204,6 +204,7 @@ async function updateCard(userId, cardId, fields) {
   const newBmId        = fields.bm_id        !== undefined ? fields.bm_id        : current.bm_id
   const newBmName      = fields.bm_name      !== undefined ? fields.bm_name      : current.bm_name
   const newNotes       = fields.notes        !== undefined ? fields.notes        : current.notes
+  const newBmStatus    = fields.bm_status    !== undefined ? fields.bm_status    : current.bm_status
 
   const movingColumn = newColumnId !== current.column_id
   const now = new Date().toISOString()
@@ -251,10 +252,10 @@ async function updateCard(userId, cardId, fields) {
   await db.execute({
     sql: `UPDATE bm_cards SET
             column_id = ?, position = ?, profile_name = ?, supplier = ?,
-            bm_id = ?, bm_name = ?, notes = ?, updated_at = ?,
+            bm_id = ?, bm_name = ?, notes = ?, bm_status = ?, updated_at = ?,
             moved_at = ?
           WHERE id = ? AND user_id = ?`,
-    args: [newColumnId, newPosition, newProfileName, newSupplier, newBmId, newBmName, newNotes, now, movingColumn ? now : (current.moved_at ?? null), cardId, userId],
+    args: [newColumnId, newPosition, newProfileName, newSupplier, newBmId, newBmName, newNotes, newBmStatus, now, movingColumn ? now : (current.moved_at ?? null), cardId, userId],
   })
 
   const { rows: updated } = await db.execute({
