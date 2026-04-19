@@ -8,6 +8,8 @@ import Templates from './pages/Templates'
 import DisparosNovo from './pages/Disparos/Novo'
 import DisparosHistorico from './pages/Disparos/Historico'
 import Configuracoes from './pages/Configuracoes'
+import Kanban from './pages/Kanban'
+import Inventario from './pages/Inventario'
 
 // Layout
 import Layout from './components/Layout/Layout'
@@ -41,6 +43,8 @@ export default function App() {
           <Route path="templates"           element={<Templates />} />
           <Route path="disparos/novo"       element={<DisparosNovo />} />
           <Route path="disparos/historico"  element={<DisparosHistorico />} />
+          <Route path="kanban"              element={<Kanban />} />
+          <Route path="inventario"          element={<Inventario />} />
           <Route path="configuracoes"       element={<Configuracoes />} />
         </Route>
 

@@ -2,12 +2,14 @@ import { NavLink } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 
 const NAV = [
-  { to: '/dashboard',          label: 'Dashboard',    icon: IconGrid  },
-  { to: '/wabas',              label: 'WABAs',         icon: IconPhone },
-  { to: '/templates',          label: 'Templates',     icon: IconDoc   },
-  { to: '/disparos/novo',      label: 'Novo Disparo',  icon: IconSend  },
-  { to: '/disparos/historico', label: 'Histórico',     icon: IconClock },
-  { to: '/configuracoes',      label: 'Configurações', icon: IconGear  },
+  { to: '/dashboard',          label: 'Dashboard',    icon: IconGrid    },
+  { to: '/wabas',              label: 'WABAs',         icon: IconPhone   },
+  { to: '/templates',          label: 'Templates',     icon: IconDoc     },
+  { to: '/disparos/novo',      label: 'Novo Disparo',  icon: IconSend    },
+  { to: '/disparos/historico', label: 'Histórico',     icon: IconClock   },
+  { to: '/kanban',             label: 'Kanban BMs',    icon: IconKanban  },
+  { to: '/inventario',         label: 'Números',       icon: IconNumbers },
+  { to: '/configuracoes',      label: 'Configurações', icon: IconGear    },
 ]
 
 export default function Sidebar() {
@@ -143,6 +145,26 @@ function IconGear() {
     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
       <circle cx="10" cy="10" r="3" stroke="currentColor" strokeWidth="1.6"/>
       <path d="M10 2v2M10 16v2M2 10h2M16 10h2M4.22 4.22l1.42 1.42M14.36 14.36l1.42 1.42M4.22 15.78l1.42-1.42M14.36 5.64l1.42-1.42" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
+function IconKanban() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <rect x="2" y="3" width="4" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.6"/>
+      <rect x="8" y="3" width="4" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.6"/>
+      <rect x="14" y="3" width="4" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.6"/>
+    </svg>
+  )
+}
+
+function IconNumbers() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <rect x="2" y="5" width="5" height="5" rx="1.5" stroke="currentColor" strokeWidth="1.6"/>
+      <rect x="2" y="12" width="5" height="5" rx="1.5" stroke="currentColor" strokeWidth="1.6"/>
+      <path d="M10 7h8M10 14h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
     </svg>
   )
 }

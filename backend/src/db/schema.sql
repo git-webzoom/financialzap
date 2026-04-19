@@ -160,3 +160,60 @@ CREATE TABLE IF NOT EXISTS warming_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_warming_logs_phone_number_id ON warming_logs(phone_number_id);
+
+-- ─── kanban_columns ───────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS kanban_columns (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER NOT NULL,
+  title      TEXT    NOT NULL,
+  position   INTEGER NOT NULL DEFAULT 0,
+  color      TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_kanban_columns_user_id ON kanban_columns(user_id);
+
+-- ─── bm_cards ─────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS bm_cards (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id        INTEGER NOT NULL,
+  column_id      INTEGER NOT NULL,
+  position       INTEGER NOT NULL DEFAULT 0,
+  profile_name   TEXT,
+  supplier       TEXT,
+  bm_id          TEXT,
+  bm_name        TEXT,
+  waba_id        TEXT,
+  waba_name      TEXT,
+  phone_number   TEXT,
+  notes          TEXT,
+  created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id)   REFERENCES users(id)          ON DELETE CASCADE,
+  FOREIGN KEY (column_id) REFERENCES kanban_columns(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_bm_cards_user_id   ON bm_cards(user_id);
+CREATE INDEX IF NOT EXISTS idx_bm_cards_column_id ON bm_cards(column_id);
+
+-- ─── number_inventory ─────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS number_inventory (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id         INTEGER NOT NULL,
+  phone_number    TEXT    NOT NULL,
+  origin          TEXT    NOT NULL CHECK (origin IN ('own', 'rented')),
+  supplier        TEXT,
+  bm_name         TEXT,
+  waba_name       TEXT,
+  automation_name TEXT,
+  status          TEXT    NOT NULL DEFAULT 'free' CHECK (status IN ('free', 'in_use', 'reserved')),
+  notes           TEXT,
+  created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_number_inventory_user_id ON number_inventory(user_id);
+CREATE INDEX IF NOT EXISTS idx_number_inventory_status  ON number_inventory(status);
+CREATE INDEX IF NOT EXISTS idx_number_inventory_origin  ON number_inventory(origin);

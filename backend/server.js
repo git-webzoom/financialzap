@@ -19,6 +19,8 @@ app.use('/api/templates',  require('./src/routes/template.routes'))
 app.use('/api/campanhas',  require('./src/routes/campanha.routes'))
 app.use('/api/aquecimento',require('./src/routes/aquecimento.routes'))
 app.use('/api/webhook',    require('./src/routes/webhook.routes'))
+app.use('/api/kanban',     require('./src/routes/kanban.routes'))
+app.use('/api/inventory',  require('./src/routes/inventory.routes'))
 
 // Run migrations then start server
 migrate()
