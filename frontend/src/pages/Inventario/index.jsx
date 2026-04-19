@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { useInventory } from '../../hooks/useInventory'
 import * as inventoryService from '../../services/inventoryService'
 
@@ -142,11 +142,12 @@ const EMPTY_FORM = {
 function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
   const [form, setForm]         = useState(initial ? { ...EMPTY_FORM, ...initial } : { ...EMPTY_FORM })
   const [saving, setSaving]     = useState(false)
-  // createdNumber: after creation we stay open in edit mode
+  // createdNumber: after creation we stay open showing only the automations section
   const [createdNumber, setCreatedNumber] = useState(null)
   const [automations, setAutos] = useState(initial?.automations ?? [])
   const [showAddAuto, setShowAdd] = useState(false)
   const [editingAuto, setEditingAuto] = useState(null)
+  const autoSectionRef = useRef(null)
 
   // The "effective" number for automation calls (either the passed `initial` or the just-created one)
   const effectiveNumber = createdNumber ?? initial
@@ -162,9 +163,11 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
     try {
       const saved = await onSave(form)
       if (!initial && saved) {
-        // Creation — stay open, switch to edit mode
+        // Creation — stay open, show automations section
         setCreatedNumber(saved)
         setAutos(saved.automations ?? [])
+        // Scroll to automations section after render
+        setTimeout(() => autoSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
       } else {
         onClose()
       }
@@ -209,70 +212,80 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
           <button className="inv-icon-btn" onClick={onClose}><IconX /></button>
         </div>
         <form className="inv-modal-form" onSubmit={handleSubmit}>
-          <div className="inv-form-row">
-            <label>Número de Telefone *</label>
-            <input value={form.phone_number} onChange={field('phone_number')} placeholder="+55 11 99999-9999" className="inv-mono" required disabled={!!createdNumber} />
-          </div>
-          <div className="inv-form-2col">
-            <div className="inv-form-row">
-              <label>Origem *</label>
-              <select value={form.origin} onChange={field('origin')} required disabled={!!createdNumber}>
-                <option value="own">Próprio</option>
-                <option value="rented">Alugado</option>
-              </select>
+          {/* Banner de sucesso após criar — substitui os campos */}
+          {createdNumber ? (
+            <div className="inv-created-banner">
+              ✓ Número <strong className="inv-mono">{createdNumber.phone_number}</strong> registrado com sucesso.
+              Adicione as automações abaixo.
             </div>
-            <div className="inv-form-row">
-              <label>Status</label>
-              <select value={form.status} onChange={field('status')} disabled={!!createdNumber}>
-                <option value="free">Livre</option>
-                <option value="in_use">Em uso</option>
-                <option value="reserved">Reservado</option>
-              </select>
-            </div>
-          </div>
-          <div className="inv-form-row">
-            <label>Fornecedor</label>
-            <input value={form.supplier || ''} onChange={field('supplier')} placeholder="Nome do fornecedor" disabled={!!createdNumber} />
-          </div>
-          <div className="inv-form-2col">
-            <div className="inv-form-row">
-              <label>BM</label>
-              <input value={form.bm_name || ''} onChange={field('bm_name')} placeholder="Nome da BM" disabled={!!createdNumber} />
-            </div>
-            <div className="inv-form-row">
-              <label>WABA</label>
-              <input value={form.waba_name || ''} onChange={field('waba_name')} placeholder="Nome da WABA" disabled={!!createdNumber} />
-            </div>
-          </div>
-          <div className="inv-form-2col">
-            <div className="inv-form-row">
-              <label>Qualidade</label>
-              <select value={form.quality_rating || ''} onChange={field('quality_rating')} disabled={!!createdNumber}>
-                <option value="">— Não definido —</option>
-                <option value="GREEN">Verde</option>
-                <option value="YELLOW">Amarelo</option>
-                <option value="RED">Vermelho</option>
-              </select>
-            </div>
-            <div className="inv-form-row">
-              <label>Tier de limite</label>
-              <select value={form.messaging_limit_tier || ''} onChange={field('messaging_limit_tier')} disabled={!!createdNumber}>
-                <option value="">— Não definido —</option>
-                <option value="TIER_1">Tier 1 (1k/dia)</option>
-                <option value="TIER_2">Tier 2 (10k/dia)</option>
-                <option value="TIER_3">Tier 3 (100k/dia)</option>
-                <option value="TIER_4">Tier 4 (ilimitado)</option>
-              </select>
-            </div>
-          </div>
-          <div className="inv-form-row">
-            <label>Observações</label>
-            <textarea value={form.notes || ''} onChange={field('notes')} rows={3} placeholder="Notas livres..." disabled={!!createdNumber} />
-          </div>
+          ) : (
+            <>
+              <div className="inv-form-row">
+                <label>Número de Telefone *</label>
+                <input value={form.phone_number} onChange={field('phone_number')} placeholder="+55 11 99999-9999" className="inv-mono" required />
+              </div>
+              <div className="inv-form-2col">
+                <div className="inv-form-row">
+                  <label>Origem *</label>
+                  <select value={form.origin} onChange={field('origin')} required>
+                    <option value="own">Próprio</option>
+                    <option value="rented">Alugado</option>
+                  </select>
+                </div>
+                <div className="inv-form-row">
+                  <label>Status</label>
+                  <select value={form.status} onChange={field('status')}>
+                    <option value="free">Livre</option>
+                    <option value="in_use">Em uso</option>
+                    <option value="reserved">Reservado</option>
+                  </select>
+                </div>
+              </div>
+              <div className="inv-form-row">
+                <label>Fornecedor</label>
+                <input value={form.supplier || ''} onChange={field('supplier')} placeholder="Nome do fornecedor" />
+              </div>
+              <div className="inv-form-2col">
+                <div className="inv-form-row">
+                  <label>BM</label>
+                  <input value={form.bm_name || ''} onChange={field('bm_name')} placeholder="Nome da BM" />
+                </div>
+                <div className="inv-form-row">
+                  <label>WABA</label>
+                  <input value={form.waba_name || ''} onChange={field('waba_name')} placeholder="Nome da WABA" />
+                </div>
+              </div>
+              <div className="inv-form-2col">
+                <div className="inv-form-row">
+                  <label>Qualidade</label>
+                  <select value={form.quality_rating || ''} onChange={field('quality_rating')}>
+                    <option value="">— Não definido —</option>
+                    <option value="GREEN">Verde</option>
+                    <option value="YELLOW">Amarelo</option>
+                    <option value="RED">Vermelho</option>
+                  </select>
+                </div>
+                <div className="inv-form-row">
+                  <label>Tier de limite</label>
+                  <select value={form.messaging_limit_tier || ''} onChange={field('messaging_limit_tier')}>
+                    <option value="">— Não definido —</option>
+                    <option value="TIER_1">Tier 1 (1k/dia)</option>
+                    <option value="TIER_2">Tier 2 (10k/dia)</option>
+                    <option value="TIER_3">Tier 3 (100k/dia)</option>
+                    <option value="TIER_4">Tier 4 (ilimitado)</option>
+                  </select>
+                </div>
+              </div>
+              <div className="inv-form-row">
+                <label>Observações</label>
+                <textarea value={form.notes || ''} onChange={field('notes')} rows={3} placeholder="Notas livres..." />
+              </div>
+            </>
+          )}
 
           {/* Automations section — only when we have an ID (edit or just created) */}
           {isEdit && (
-            <div className="inv-auto-section">
+            <div className="inv-auto-section" ref={autoSectionRef}>
               <div className="inv-auto-section-header">
                 <span>Automações ({automations.length})</span>
                 {!showAddAuto && (
@@ -1155,6 +1168,16 @@ const CSS_STR = `
     border-top: 1px solid #1a2030;
     margin-top: 4px;
     padding-bottom: 2px;
+  }
+
+  .inv-created-banner {
+    background: #22c55e12;
+    border: 1px solid #22c55e35;
+    color: #22c55e;
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.5;
   }
 
   /* Automations section inside modal */
