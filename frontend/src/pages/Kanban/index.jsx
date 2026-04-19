@@ -920,8 +920,7 @@ const CSS_STR = `
     border-radius: 12px;
     display: flex;
     flex-direction: column;
-    max-height: calc(100vh - 200px);
-    overflow: hidden;
+    height: calc(100vh - 180px);
   }
   .kb-col--dragging { opacity: 0.5; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
 
@@ -1004,13 +1003,12 @@ const CSS_STR = `
   .kb-col-cards {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 10px 10px 4px;
     display: flex;
     flex-direction: column;
     gap: 8px;
   }
-  .kb-col-cards::-webkit-scrollbar { width: 3px; }
-  .kb-col-cards::-webkit-scrollbar-thumb { background: #252c38; }
 
   .kb-card {
     background: #141820;
