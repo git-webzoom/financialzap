@@ -78,5 +78,31 @@ export function useKanban() {
     }
   }, [loadBoard])
 
-  return { columns, cards, loading, error, loadBoard, createColumn, updateColumn, deleteColumn, createCard, updateCard, deleteCard, moveCard }
+  // Optimistic column reorder — swaps positions locally then persists both
+  const moveColumn = useCallback(async (activeId, overId) => {
+    setColumns(prev => {
+      const from = prev.findIndex(c => c.id === activeId)
+      const to   = prev.findIndex(c => c.id === overId)
+      if (from === -1 || to === -1 || from === to) return prev
+      const next = [...prev]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next.map((c, i) => ({ ...c, position: i }))
+    })
+    try {
+      const newCols = await Promise.all([
+        kanbanService.updateColumn(activeId, { position: columns.findIndex(c => c.id === overId) }),
+        kanbanService.updateColumn(overId,   { position: columns.findIndex(c => c.id === activeId) }),
+      ])
+      setColumns(prev => prev.map(c => {
+        const updated = newCols.find(u => u.id === c.id)
+        return updated ?? c
+      }))
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erro ao reordenar colunas')
+      loadBoard()
+    }
+  }, [columns, loadBoard])
+
+  return { columns, cards, loading, error, loadBoard, createColumn, updateColumn, deleteColumn, createCard, updateCard, deleteCard, moveCard, moveColumn }
 }

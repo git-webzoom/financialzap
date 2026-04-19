@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import {
   DndContext,
   PointerSensor,
@@ -12,6 +12,8 @@ import {
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
+  horizontalListSortingStrategy,
+  arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useKanban } from '../../hooks/useKanban'
@@ -47,6 +49,19 @@ function IconX() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
       <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
+function IconGrip() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <circle cx="4" cy="3" r="1" fill="currentColor"/>
+      <circle cx="8" cy="3" r="1" fill="currentColor"/>
+      <circle cx="4" cy="6" r="1" fill="currentColor"/>
+      <circle cx="8" cy="6" r="1" fill="currentColor"/>
+      <circle cx="4" cy="9" r="1" fill="currentColor"/>
+      <circle cx="8" cy="9" r="1" fill="currentColor"/>
     </svg>
   )
 }
@@ -117,12 +132,30 @@ function KanbanCard({ card, onEdit, onDelete, isDragging }) {
 
 // ─── Column component ─────────────────────────────────────────────────────────
 
-function KanbanColumn({ column, cards, onAddCard, onEditCard, onDeleteCard, onDeleteColumn, onRenameColumn, activeCardId }) {
+function KanbanColumn({ column, cards, onAddCard, onEditCard, onDeleteCard, onDeleteColumn, onRenameColumn, activeCardId, isColDragging }) {
   const [editing, setEditing] = useState(false)
   const [title, setTitle]     = useState(column.title)
   const inputRef = useRef(null)
 
+  // Sortable for column reorder
+  const {
+    attributes: colAttrs,
+    listeners: colListeners,
+    setNodeRef: setColRef,
+    transform: colTransform,
+    transition: colTransition,
+  } = useSortable({ id: `col-${column.id}` })
+
+  const colStyle = {
+    transform: CSS.Transform.toString(colTransform),
+    transition: colTransition,
+    opacity: isColDragging ? 0.4 : 1,
+  }
+
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: `col-${column.id}` })
+
+  // Merge refs
+  function mergeRef(el) { setColRef(el); setDropRef(el) }
 
   useEffect(() => { if (editing) inputRef.current?.focus() }, [editing])
 
@@ -137,8 +170,17 @@ function KanbanColumn({ column, cards, onAddCard, onEditCard, onDeleteCard, onDe
   const avgDays = daysValues.length > 0 ? Math.round(daysValues.reduce((s, d) => s + d, 0) / daysValues.length) : null
 
   return (
-    <div className="kb-col">
+    <div ref={mergeRef} style={colStyle} className="kb-col">
       <div className="kb-col-header">
+        {/* Drag handle for column reorder */}
+        <span
+          className="kb-col-grip"
+          {...colAttrs}
+          {...colListeners}
+          title="Arrastar para reordenar"
+        >
+          <IconGrip />
+        </span>
         <div className="kb-col-title-wrap">
           <span className="kb-col-dot" style={{ background: column.color || '#8a94a6' }} />
           {editing ? (
@@ -174,7 +216,6 @@ function KanbanColumn({ column, cards, onAddCard, onEditCard, onDeleteCard, onDe
 
       <SortableContext items={cards.map(c => `card-${c.id}`)} strategy={verticalListSortingStrategy}>
         <div
-          ref={setDropRef}
           className="kb-col-cards"
           style={{ background: isOver ? '#22c55e08' : undefined }}
         >
@@ -482,11 +523,14 @@ function WabaForm({ initial, onSave, onCancel }) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Kanban() {
-  const { columns, cards, loading, error, loadBoard, createColumn, updateColumn, deleteColumn, createCard, updateCard, deleteCard, moveCard } = useKanban()
+  const { columns, cards, loading, error, loadBoard, createColumn, updateColumn, deleteColumn, createCard, updateCard, deleteCard, moveCard, moveColumn } = useKanban()
   const [newColName, setNewColName] = useState('')
   const [addingCol, setAddingCol]   = useState(false)
-  const [modal, setModal]           = useState(null)  // { mode: 'create'|'edit', card?, columnId? }
-  const [activeId, setActiveId]     = useState(null)
+  const [modal, setModal]           = useState(null)
+  const [activeCardId, setActiveCardId] = useState(null)
+  const [activeColId,  setActiveColId]  = useState(null)
+  const [search,       setSearch]       = useState('')
+  const [filterCol,    setFilterCol]    = useState('')
   const newColRef = useRef(null)
 
   useEffect(() => { loadBoard() }, [loadBoard])
@@ -494,8 +538,27 @@ export default function Kanban() {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
+  // ── Filtering ──
+  const filteredCardIds = useMemo(() => {
+    if (!search.trim()) return null  // null = show all
+    const q = search.toLowerCase()
+    return new Set(
+      cards
+        .filter(c => {
+          if (c.profile_name?.toLowerCase().includes(q)) return true
+          if (c.bm_name?.toLowerCase().includes(q)) return true
+          const phones = (c.wabas ?? []).flatMap(w => (w.phones ?? []).map(p => p.phone_number))
+          if (phones.some(p => p.toLowerCase().includes(q))) return true
+          return false
+        })
+        .map(c => c.id)
+    )
+  }, [cards, search])
+
   function cardsForColumn(colId) {
-    return cards.filter(c => c.column_id === colId).sort((a, b) => a.position - b.position)
+    let list = cards.filter(c => c.column_id === colId).sort((a, b) => a.position - b.position)
+    if (filteredCardIds) list = list.filter(c => filteredCardIds.has(c.id))
+    return list
   }
 
   async function handleAddColumn(e) {
@@ -533,38 +596,56 @@ export default function Kanban() {
     }
   }
 
-  function handleCardUpdated(updated) {
-    // Sync wabas into the cards list so the card badge reflects changes
-    loadBoard()
-  }
+  function handleCardUpdated() { loadBoard() }
 
   function handleDragStart({ active }) {
-    setActiveId(Number(String(active.id).replace('card-', '')))
-  }
-
-  function handleDragEnd({ active, over }) {
-    setActiveId(null)
-    if (!over) return
-
-    const cardId   = Number(String(active.id).replace('card-', ''))
-    const overId   = String(over.id)
-
-    if (overId.startsWith('col-')) {
-      const colId    = Number(overId.replace('col-', ''))
-      const colCards = cardsForColumn(colId)
-      const dragging = cards.find(c => c.id === cardId)
-      if (dragging && dragging.column_id === colId && colCards.length <= 1) return
-      moveCard(cardId, colId, colCards.length)
-    } else if (overId.startsWith('card-')) {
-      const overCardId = Number(overId.replace('card-', ''))
-      if (cardId === overCardId) return
-      const overCard = cards.find(c => c.id === overCardId)
-      if (!overCard) return
-      moveCard(cardId, overCard.column_id, overCard.position)
+    const id = String(active.id)
+    if (id.startsWith('col-')) {
+      setActiveColId(Number(id.replace('col-', '')))
+    } else {
+      setActiveCardId(Number(id.replace('card-', '')))
     }
   }
 
-  const activeCard = activeId ? cards.find(c => c.id === activeId) : null
+  function handleDragEnd({ active, over }) {
+    setActiveCardId(null)
+    setActiveColId(null)
+    if (!over) return
+
+    const activeStr = String(active.id)
+    const overStr   = String(over.id)
+
+    // ── Column reorder ──
+    if (activeStr.startsWith('col-') && overStr.startsWith('col-')) {
+      const aId = Number(activeStr.replace('col-', ''))
+      const oId = Number(overStr.replace('col-', ''))
+      if (aId !== oId) moveColumn(aId, oId)
+      return
+    }
+
+    // ── Card move ──
+    if (activeStr.startsWith('card-')) {
+      const cardId = Number(activeStr.replace('card-', ''))
+      if (overStr.startsWith('col-')) {
+        const colId    = Number(overStr.replace('col-', ''))
+        const colCards = cardsForColumn(colId)
+        const dragging = cards.find(c => c.id === cardId)
+        if (dragging && dragging.column_id === colId && colCards.length <= 1) return
+        moveCard(cardId, colId, colCards.length)
+      } else if (overStr.startsWith('card-')) {
+        const overCardId = Number(overStr.replace('card-', ''))
+        if (cardId === overCardId) return
+        const overCard = cards.find(c => c.id === overCardId)
+        if (!overCard) return
+        moveCard(cardId, overCard.column_id, overCard.position)
+      }
+    }
+  }
+
+  const activeCard = activeCardId ? cards.find(c => c.id === activeCardId) : null
+  const activeCol  = activeColId  ? columns.find(c => c.id === activeColId)  : null
+
+  const matchCount = filteredCardIds ? filteredCardIds.size : null
 
   return (
     <>
@@ -579,6 +660,26 @@ export default function Kanban() {
             <button className="kb-btn kb-btn--primary" onClick={() => setAddingCol(true)}>
               <IconPlus /> Nova coluna
             </button>
+          )}
+        </div>
+
+        {/* ── Filters ── */}
+        <div className="kb-filters">
+          <input
+            className="kb-search"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar por nome de BM, perfil ou número…"
+          />
+          {search && (
+            <button className="kb-search-clear" onClick={() => setSearch('')} title="Limpar busca">
+              <IconX />
+            </button>
+          )}
+          {matchCount !== null && (
+            <span className="kb-filter-count">
+              {matchCount} card{matchCount !== 1 ? 's' : ''} encontrado{matchCount !== 1 ? 's' : ''}
+            </span>
           )}
         </div>
 
@@ -601,29 +702,50 @@ export default function Kanban() {
         {loading ? (
           <div className="kb-loading">Carregando board…</div>
         ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-            <div className="kb-board">
-              {columns.map(col => (
-                <KanbanColumn
-                  key={col.id}
-                  column={col}
-                  cards={cardsForColumn(col.id)}
-                  onAddCard={(colId) => setModal({ mode: 'create', columnId: colId })}
-                  onEditCard={(card) => setModal({ mode: 'edit', card })}
-                  onDeleteCard={handleDeleteCard}
-                  onDeleteColumn={handleDeleteColumn}
-                  onRenameColumn={handleRenameColumn}
-                  activeCardId={activeId}
-                />
-              ))}
-              {columns.length === 0 && !loading && (
-                <div className="kb-empty">Nenhuma coluna ainda. Clique em "Nova coluna" para começar.</div>
-              )}
-            </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCorners}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            {/* Outer SortableContext for columns */}
+            <SortableContext
+              items={columns.map(c => `col-${c.id}`)}
+              strategy={horizontalListSortingStrategy}
+            >
+              <div className="kb-board">
+                {columns.map(col => (
+                  <KanbanColumn
+                    key={col.id}
+                    column={col}
+                    cards={cardsForColumn(col.id)}
+                    onAddCard={(colId) => setModal({ mode: 'create', columnId: colId })}
+                    onEditCard={(card) => setModal({ mode: 'edit', card })}
+                    onDeleteCard={handleDeleteCard}
+                    onDeleteColumn={handleDeleteColumn}
+                    onRenameColumn={handleRenameColumn}
+                    activeCardId={activeCardId}
+                    isColDragging={activeColId === col.id}
+                  />
+                ))}
+                {columns.length === 0 && !loading && (
+                  <div className="kb-empty">Nenhuma coluna ainda. Clique em "Nova coluna" para começar.</div>
+                )}
+              </div>
+            </SortableContext>
+
             <DragOverlay>
               {activeCard && (
                 <div className="kb-card kb-card--dragging">
                   <span className="kb-card-name">{activeCard.bm_name || activeCard.profile_name || '—'}</span>
+                </div>
+              )}
+              {activeCol && (
+                <div className="kb-col kb-col--dragging">
+                  <div className="kb-col-header">
+                    <span className="kb-col-dot" style={{ background: activeCol.color || '#8a94a6' }} />
+                    <span className="kb-col-title">{activeCol.title}</span>
+                  </div>
                 </div>
               )}
             </DragOverlay>
@@ -656,6 +778,51 @@ const CSS_STR = `
   }
   .kb-page-title { font-size: 20px; font-weight: 600; color: #e8edf5; }
   .kb-page-sub   { font-size: 13px; color: #8a94a6; margin-top: 2px; }
+
+  /* ── Filters ── */
+  .kb-filters {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    position: relative;
+  }
+  .kb-search {
+    flex: 1;
+    min-width: 240px;
+    background: #141820;
+    border: 1px solid #252c38;
+    border-radius: 8px;
+    color: #e8edf5;
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 36px 8px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .kb-search:focus { border-color: #22c55e; }
+  .kb-search-clear {
+    position: absolute;
+    right: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: none;
+    border: none;
+    color: #4a5568;
+    cursor: pointer;
+    margin-left: -38px;
+    transition: color 0.12s;
+    flex-shrink: 0;
+  }
+  .kb-search-clear:hover { color: #8a94a6; }
+  .kb-filter-count {
+    font-size: 12px;
+    color: #22c55e;
+    white-space: nowrap;
+  }
 
   .kb-new-col-form {
     display: flex;
@@ -700,6 +867,8 @@ const CSS_STR = `
     flex-direction: column;
     max-height: calc(100vh - 200px);
   }
+  .kb-col--dragging { opacity: 0.5; box-shadow: 0 8px 32px rgba(0,0,0,0.5); }
+
   .kb-col-header {
     display: flex;
     align-items: center;
@@ -708,6 +877,18 @@ const CSS_STR = `
     border-bottom: 1px solid #1a2030;
     gap: 8px;
   }
+  .kb-col-grip {
+    display: flex;
+    align-items: center;
+    color: #252c38;
+    cursor: grab;
+    flex-shrink: 0;
+    padding: 2px;
+    border-radius: 4px;
+    transition: color 0.12s;
+  }
+  .kb-col-grip:hover { color: #4a5568; }
+  .kb-col-grip:active { cursor: grabbing; }
   .kb-col-title-wrap {
     display: flex;
     align-items: center;
