@@ -47,9 +47,10 @@ function IconChevronLeft() {
 // ─── Badges ───────────────────────────────────────────────────────────────────
 
 const STATUS_CFG = {
-  free:     { label: 'Livre',     color: '#22c55e', bg: '#22c55e18', border: '#22c55e35' },
-  in_use:   { label: 'Em uso',    color: '#8a94a6', bg: '#8a94a615', border: '#8a94a630' },
-  reserved: { label: 'Reservado', color: '#f59e0b', bg: '#f59e0b18', border: '#f59e0b35' },
+  free:        { label: 'Livre',           color: '#22c55e', bg: '#22c55e18', border: '#22c55e35' },
+  in_use:      { label: 'Em uso',          color: '#8a94a6', bg: '#8a94a615', border: '#8a94a630' },
+  reserved:    { label: 'Reservado',       color: '#f59e0b', bg: '#f59e0b18', border: '#f59e0b35' },
+  com_restricao: { label: 'Com Restrição', color: '#ef4444', bg: '#ef444418', border: '#ef444435' },
 }
 
 const ORIGIN_CFG = {
@@ -126,7 +127,17 @@ function AutoCount({ count }) {
   if (!count) return <span className="inv-dash">Nenhuma</span>
   return (
     <span className="inv-badge" style={{ color: '#8a94a6', background: '#8a94a615', borderColor: '#8a94a630' }}>
-      {count} automação{count !== 1 ? 'ões' : ''}
+      {count} {count === 1 ? 'automação' : 'automações'}
+    </span>
+  )
+}
+
+function TierBadge({ tier }) {
+  if (!tier) return <span className="inv-dash">—</span>
+  const label = TIER_LABELS[tier] ?? tier
+  return (
+    <span className="inv-badge" style={{ color: '#3b82f6', background: '#3b82f618', borderColor: '#3b82f635' }}>
+      {label}
     </span>
   )
 }
@@ -239,6 +250,7 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
                     <option value="free">Livre</option>
                     <option value="in_use">Em uso</option>
                     <option value="reserved">Reservado</option>
+                    <option value="com_restricao">Com Restrição</option>
                   </select>
                 </div>
               </div>
@@ -670,6 +682,7 @@ function DetailDrawer({ number: initialNumber, onClose, onNumberUpdated }) {
                     <option value="free">Livre</option>
                     <option value="in_use">Em uso</option>
                     <option value="reserved">Reservado</option>
+                    <option value="com_restricao">Com Restrição</option>
                   </select>
                 </div>
               </div>
@@ -891,7 +904,8 @@ export default function Inventario() {
         (n.supplier || '').toLowerCase().includes(q) ||
         (n.automations || []).some(a =>
           (a.automation_name || '').toLowerCase().includes(q) ||
-          (a.template_name || '').toLowerCase().includes(q)
+          (a.tool_name || '').toLowerCase().includes(q) ||
+          (a.templates || []).some(t => (t.template_name || '').toLowerCase().includes(q))
         )
       )
     }
@@ -942,13 +956,14 @@ export default function Inventario() {
             className="inv-search"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar por número, BM, WABA, automação…"
+            placeholder="Buscar por número, fornecedor, automação, ferramenta, template…"
           />
           <select className="inv-select" value={filterStatus} onChange={e => setStatus(e.target.value)}>
             <option value="">Todos os status</option>
             <option value="free">Livre</option>
             <option value="in_use">Em uso</option>
             <option value="reserved">Reservado</option>
+            <option value="com_restricao">Com Restrição</option>
           </select>
           <select className="inv-select" value={filterOrigin} onChange={e => setOrigin(e.target.value)}>
             <option value="">Todas as origens</option>
@@ -965,9 +980,8 @@ export default function Inventario() {
                 <th>Número</th>
                 <th>Origem</th>
                 <th>Fornecedor</th>
-                <th>BM</th>
-                <th>WABA</th>
                 <th>Qualidade</th>
+                <th>Tier</th>
                 <th>Vol./dia</th>
                 <th>Automações</th>
                 <th>Status</th>
@@ -976,10 +990,10 @@ export default function Inventario() {
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={10} className="inv-td-center">Carregando…</td></tr>
+                <tr><td colSpan={9} className="inv-td-center">Carregando…</td></tr>
               )}
               {!loading && filtered.length === 0 && (
-                <tr><td colSpan={10} className="inv-td-center">Nenhum número encontrado.</td></tr>
+                <tr><td colSpan={9} className="inv-td-center">Nenhum número encontrado.</td></tr>
               )}
               {filtered.map(n => (
                 <tr key={n.id} className="inv-row">
@@ -990,9 +1004,8 @@ export default function Inventario() {
                   </td>
                   <td className="inv-td"><OriginBadge origin={n.origin} /></td>
                   <td className="inv-td">{n.supplier || <span className="inv-dash">—</span>}</td>
-                  <td className="inv-td">{n.bm_name   || <span className="inv-dash">—</span>}</td>
-                  <td className="inv-td">{n.waba_name || <span className="inv-dash">—</span>}</td>
                   <td className="inv-td"><QualityBadge quality={n.quality_rating} /></td>
+                  <td className="inv-td"><TierBadge tier={n.messaging_limit_tier} /></td>
                   <td className="inv-td"><VolumeBadge total={n.total_daily_volume ?? 0} limit={n.tier_limit} /></td>
                   <td className="inv-td"><AutoCount count={n.automations?.length ?? 0} /></td>
                   <td className="inv-td"><StatusBadge status={n.status} /></td>
