@@ -96,20 +96,21 @@ function _validarDisparo({ nome, tipo, dia_semana, data_fixa, horario }) {
   }
 }
 
-const VALID_COPY = ['texto', 'video', 'imagem']
+const VALID_COPY = ['sem_copy', 'texto', 'video', 'imagem']
 
-async function criarDisparo(grupoId, { nome, tipo = 'recorrente', dia_semana, data_fixa, horario, ferramenta, tipo_copy, status, responsavel, observacao }) {
+async function criarDisparo(grupoId, { nome, tipo = 'recorrente', dia_semana, data_fixa, horario, ferramenta, campanha_grupo, tipo_copy, copy_texto, status, responsavel, observacao }) {
   _validarDisparo({ nome, tipo, dia_semana, data_fixa, horario })
 
   const st  = status && VALID_STATUS.includes(status) ? status : 'ativo'
   const tc  = tipo_copy && VALID_COPY.includes(tipo_copy) ? tipo_copy : null
+  const ct  = tc && tc !== 'sem_copy' ? (copy_texto ?? null) : null
   const db  = getDb()
   const now = new Date().toISOString()
 
   const { lastInsertRowid } = await db.execute({
     sql: `INSERT INTO fluxo_mensagens
-            (grupo_id, nome, tipo, dia_semana, data_fixa, horario, ferramenta, tipo_copy, status, responsavel, observacao, criado_em, atualizado_em)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            (grupo_id, nome, tipo, dia_semana, data_fixa, horario, ferramenta, campanha_grupo, tipo_copy, copy_texto, status, responsavel, observacao, criado_em, atualizado_em)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       Number(grupoId),
       nome.trim(),
@@ -117,8 +118,10 @@ async function criarDisparo(grupoId, { nome, tipo = 'recorrente', dia_semana, da
       tipo === 'recorrente' ? dia_semana : null,
       tipo === 'avulso'     ? data_fixa  : null,
       horario.trim(),
-      ferramenta ?? null,
+      ferramenta     ?? null,
+      campanha_grupo ?? null,
       tc,
+      ct,
       st,
       responsavel ?? null,
       observacao  ?? null,
@@ -135,23 +138,25 @@ async function editarDisparo(id, body) {
   if (!rows.length) { const e = new Error('Disparo não encontrado'); e.status = 404; throw e }
   const cur = rows[0]
 
-  const nome        = body.nome        !== undefined ? body.nome        : cur.nome
-  const tipo        = body.tipo        !== undefined ? body.tipo        : cur.tipo
-  const dia_semana  = body.dia_semana  !== undefined ? body.dia_semana  : cur.dia_semana
-  const data_fixa   = body.data_fixa   !== undefined ? body.data_fixa   : cur.data_fixa
-  const horario     = body.horario     !== undefined ? body.horario     : cur.horario
-  const ferramenta  = body.ferramenta  !== undefined ? body.ferramenta  : cur.ferramenta
-  const tipo_copy   = body.tipo_copy && VALID_COPY.includes(body.tipo_copy) ? body.tipo_copy : (body.tipo_copy === '' ? null : cur.tipo_copy)
-  const status      = body.status && VALID_STATUS.includes(body.status) ? body.status : cur.status
-  const responsavel = body.responsavel !== undefined ? body.responsavel : cur.responsavel
-  const observacao  = body.observacao  !== undefined ? body.observacao  : cur.observacao
+  const nome           = body.nome           !== undefined ? body.nome           : cur.nome
+  const tipo           = body.tipo           !== undefined ? body.tipo           : cur.tipo
+  const dia_semana     = body.dia_semana     !== undefined ? body.dia_semana     : cur.dia_semana
+  const data_fixa      = body.data_fixa      !== undefined ? body.data_fixa      : cur.data_fixa
+  const horario        = body.horario        !== undefined ? body.horario        : cur.horario
+  const ferramenta     = body.ferramenta     !== undefined ? body.ferramenta     : cur.ferramenta
+  const campanha_grupo = body.campanha_grupo !== undefined ? body.campanha_grupo : cur.campanha_grupo
+  const tipo_copy      = body.tipo_copy && VALID_COPY.includes(body.tipo_copy) ? body.tipo_copy : (body.tipo_copy === '' ? null : cur.tipo_copy)
+  const copy_texto     = tipo_copy && tipo_copy !== 'sem_copy' ? (body.copy_texto !== undefined ? body.copy_texto : cur.copy_texto) : null
+  const status         = body.status && VALID_STATUS.includes(body.status) ? body.status : cur.status
+  const responsavel    = body.responsavel    !== undefined ? body.responsavel    : cur.responsavel
+  const observacao     = body.observacao     !== undefined ? body.observacao     : cur.observacao
 
   _validarDisparo({ nome, tipo, dia_semana, data_fixa, horario })
 
   const now = new Date().toISOString()
   await db.execute({
     sql: `UPDATE fluxo_mensagens
-          SET nome=?, tipo=?, dia_semana=?, data_fixa=?, horario=?, ferramenta=?, tipo_copy=?, status=?, responsavel=?, observacao=?, atualizado_em=?
+          SET nome=?, tipo=?, dia_semana=?, data_fixa=?, horario=?, ferramenta=?, campanha_grupo=?, tipo_copy=?, copy_texto=?, status=?, responsavel=?, observacao=?, atualizado_em=?
           WHERE id=?`,
     args: [
       nome.trim(),
@@ -159,11 +164,13 @@ async function editarDisparo(id, body) {
       tipo === 'recorrente' ? dia_semana : null,
       tipo === 'avulso'     ? data_fixa  : null,
       horario.trim(),
-      ferramenta ?? null,
-      tipo_copy  ?? null,
+      ferramenta     ?? null,
+      campanha_grupo ?? null,
+      tipo_copy      ?? null,
+      copy_texto     ?? null,
       status,
-      responsavel ?? null,
-      observacao  ?? null,
+      responsavel    ?? null,
+      observacao     ?? null,
       now,
       id,
     ],

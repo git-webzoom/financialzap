@@ -193,7 +193,7 @@ function GrupoCard({ grupo, onSelecionar, onExcluir }) {
       </div>
       <div className="rg-grupo-card-footer">
         <button className="rg-btn rg-btn--primary rg-btn--sm" onClick={() => onSelecionar(grupo)}>
-          Ver régua →
+          Ver Fluxo →
         </button>
         <button
           className="rg-icon-btn rg-icon-btn--danger"
@@ -211,9 +211,10 @@ function GrupoCard({ grupo, onSelecionar, onExcluir }) {
 // ─── DisparoForm ──────────────────────────────────────────────────────────────
 
 const TIPO_COPY_CFG = {
-  texto:  { label: 'Só texto',    color: '#8a94a6', bg: '#8a94a615', border: '#8a94a630' },
-  video:  { label: 'Com vídeo',   color: '#3b82f6', bg: '#3b82f618', border: '#3b82f640' },
-  imagem: { label: 'Com imagem',  color: '#a855f7', bg: '#a855f718', border: '#a855f740' },
+  sem_copy: { label: 'Não tem copy', color: '#4a5568', bg: '#4a556815', border: '#4a556830' },
+  texto:    { label: 'Só texto',     color: '#8a94a6', bg: '#8a94a615', border: '#8a94a630' },
+  video:    { label: 'Com vídeo',    color: '#3b82f6', bg: '#3b82f618', border: '#3b82f640' },
+  imagem:   { label: 'Com imagem',   color: '#a855f7', bg: '#a855f718', border: '#a855f740' },
 }
 
 function CopyBadge({ tipo_copy }) {
@@ -226,20 +227,22 @@ function CopyBadge({ tipo_copy }) {
   )
 }
 
-const EMPTY_DISPARO = { nome: '', tipo: 'recorrente', dia_semana: 'domingo', data_fixa: '', horario: '', ferramenta: '', tipo_copy: '', status: 'ativo', responsavel: '', observacao: '' }
+const EMPTY_DISPARO = { nome: '', tipo: 'recorrente', dia_semana: 'domingo', data_fixa: '', horario: '', ferramenta: '', campanha_grupo: '', tipo_copy: '', copy_texto: '', status: 'ativo', responsavel: '', observacao: '' }
 
 function DisparoForm({ initial, onSave, onCancel, saving }) {
   const [form, setForm] = useState(initial ? {
-    nome:        initial.nome        ?? '',
-    tipo:        initial.tipo        ?? 'recorrente',
-    dia_semana:  initial.dia_semana  ?? 'domingo',
-    data_fixa:   initial.data_fixa   ?? '',
-    horario:     initial.horario     ?? '',
-    ferramenta:  initial.ferramenta  ?? '',
-    tipo_copy:   initial.tipo_copy   ?? '',
-    status:      initial.status      ?? 'ativo',
-    responsavel: initial.responsavel ?? '',
-    observacao:  initial.observacao  ?? '',
+    nome:           initial.nome           ?? '',
+    tipo:           initial.tipo           ?? 'recorrente',
+    dia_semana:     initial.dia_semana     ?? 'domingo',
+    data_fixa:      initial.data_fixa      ?? '',
+    horario:        initial.horario        ?? '',
+    ferramenta:     initial.ferramenta     ?? '',
+    campanha_grupo: initial.campanha_grupo ?? '',
+    tipo_copy:      initial.tipo_copy      ?? '',
+    copy_texto:     initial.copy_texto     ?? '',
+    status:         initial.status         ?? 'ativo',
+    responsavel:    initial.responsavel    ?? '',
+    observacao:     initial.observacao     ?? '',
   } : { ...EMPTY_DISPARO })
 
   function field(k) { return e => setForm(f => ({ ...f, [k]: e.target.value })) }
@@ -288,14 +291,34 @@ function DisparoForm({ initial, onSave, onCancel, saving }) {
           <input value={form.ferramenta} onChange={field('ferramenta')} placeholder="Ex: ManyChat, Typebot…" />
         </div>
         <div className="rg-form-row">
+          <label>Campanha / Grupo</label>
+          <input value={form.campanha_grupo} onChange={field('campanha_grupo')} placeholder="Ex: Grupo VIP 01" />
+        </div>
+        <div className="rg-form-row">
           <label>Tipo de copy</label>
           <select value={form.tipo_copy} onChange={field('tipo_copy')}>
             <option value="">— Selecione —</option>
+            <option value="sem_copy">Não tem copy</option>
             <option value="texto">Só texto</option>
             <option value="video">Com vídeo</option>
             <option value="imagem">Com imagem</option>
           </select>
         </div>
+      </div>
+
+      {form.tipo_copy && form.tipo_copy !== 'sem_copy' && (
+        <div className="rg-form-row">
+          <label>Copy</label>
+          <textarea
+            value={form.copy_texto}
+            onChange={field('copy_texto')}
+            rows={4}
+            placeholder="Cole ou escreva a copy aqui…"
+          />
+        </div>
+      )}
+
+      <div className="rg-form-grid rg-form-grid--3">
         <div className="rg-form-row">
           <label>Status</label>
           <select value={form.status} onChange={field('status')}>
@@ -304,9 +327,6 @@ function DisparoForm({ initial, onSave, onCancel, saving }) {
             <option value="agendado">Agendado</option>
           </select>
         </div>
-      </div>
-
-      <div className="rg-form-grid rg-form-grid--2">
         <div className="rg-form-row">
           <label>Responsável</label>
           <input value={form.responsavel} onChange={field('responsavel')} placeholder="Nome do responsável" />
@@ -740,6 +760,21 @@ const CSS_STR = `
 
   .rg-form-row { display: flex; flex-direction: column; gap: 5px; }
   .rg-form-row label { font-size: 11px; color: #8a94a6; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
+  .rg-form-row textarea {
+    background: #1a1f28;
+    border: 1px solid #252c38;
+    border-radius: 7px;
+    color: #e8edf5;
+    font-size: 13px;
+    font-family: inherit;
+    padding: 8px 11px;
+    outline: none;
+    resize: vertical;
+    transition: border-color 0.15s;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .rg-form-row textarea:focus { border-color: #22c55e; }
   .rg-form-row input,
   .rg-form-row select {
     background: #1a1f28;

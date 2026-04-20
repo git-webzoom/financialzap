@@ -151,9 +151,11 @@ async function migrate() {
   `)
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_fluxo_mensagens_grupo_id ON fluxo_mensagens(grupo_id)`)
 
-  // fluxo_mensagens — campos ferramenta e tipo_copy (idempotente)
-  await addColumnIfMissing(db, 'fluxo_mensagens', 'ferramenta', 'TEXT')
-  await addColumnIfMissing(db, 'fluxo_mensagens', 'tipo_copy',  'TEXT')
+  // fluxo_mensagens — campos adicionais (idempotente)
+  await addColumnIfMissing(db, 'fluxo_mensagens', 'ferramenta',     'TEXT')
+  await addColumnIfMissing(db, 'fluxo_mensagens', 'campanha_grupo', 'TEXT')
+  await addColumnIfMissing(db, 'fluxo_mensagens', 'tipo_copy',      'TEXT')
+  await addColumnIfMissing(db, 'fluxo_mensagens', 'copy_texto',     'TEXT')
 
   console.log('[db] Migration complete.')
 }
