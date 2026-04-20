@@ -9,11 +9,13 @@ router.get('/grupos',        ctrl.listarGrupos)
 router.post('/grupos',       ctrl.criarGrupo)
 router.delete('/grupos/:id', ctrl.excluirGrupo)
 
-// Registros
-router.get('/registros',        ctrl.listarRegistros)
-router.post('/registros',       ctrl.criarRegistro)
-router.put('/registros/:id',    ctrl.editarRegistro)
-router.delete('/registros/:id', ctrl.excluirRegistro)
+// Disparos de um grupo
+router.get('/grupos/:grupoId/disparos',  ctrl.listarDisparos)
+router.post('/grupos/:grupoId/disparos', ctrl.criarDisparo)
+
+// Disparo individual (editar / excluir)
+router.put('/disparos/:id',    ctrl.editarDisparo)
+router.delete('/disparos/:id', ctrl.excluirDisparo)
 
 // Resumo
 router.get('/resumo', ctrl.obterResumo)

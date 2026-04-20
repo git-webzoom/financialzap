@@ -16,25 +16,25 @@ export async function excluirGrupo(id) {
   await api.delete(`/api/regua/grupos/${id}`)
 }
 
-// ─── Registros ────────────────────────────────────────────────────────────────
+// ─── Disparos ────────────────────────────────────────────────────────────────
 
-export async function listarRegistros(filtros = {}) {
-  const { data } = await api.get('/api/regua/registros', { params: filtros })
-  return data.registros
+export async function listarDisparos(grupoId) {
+  const { data } = await api.get(`/api/regua/grupos/${grupoId}/disparos`)
+  return data.disparos
 }
 
-export async function criarRegistro(payload) {
-  const { data } = await api.post('/api/regua/registros', payload)
-  return data.registro
+export async function criarDisparo(grupoId, payload) {
+  const { data } = await api.post(`/api/regua/grupos/${grupoId}/disparos`, payload)
+  return data.disparo
 }
 
-export async function editarRegistro(id, payload) {
-  const { data } = await api.put(`/api/regua/registros/${id}`, payload)
-  return data.registro
+export async function editarDisparo(id, payload) {
+  const { data } = await api.put(`/api/regua/disparos/${id}`, payload)
+  return data.disparo
 }
 
-export async function excluirRegistro(id) {
-  await api.delete(`/api/regua/registros/${id}`)
+export async function excluirDisparo(id) {
+  await api.delete(`/api/regua/disparos/${id}`)
 }
 
 // ─── Resumo ───────────────────────────────────────────────────────────────────

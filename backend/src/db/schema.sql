@@ -313,12 +313,15 @@ CREATE TABLE IF NOT EXISTS grupos (
 );
 
 -- ─── regua_disparos ───────────────────────────────────────────────────────────
--- Registros da régua de disparos por grupo e data.
+-- Disparos configurados por grupo: recorrentes (todo dia X da semana) ou avulsos (data fixa).
 CREATE TABLE IF NOT EXISTS regua_disparos (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   grupo_id      INTEGER NOT NULL,
-  data_disparo  DATE    NOT NULL,
-  regua         TEXT    NOT NULL,
+  nome          TEXT    NOT NULL,
+  tipo          TEXT    NOT NULL DEFAULT 'recorrente' CHECK (tipo IN ('recorrente', 'avulso')),
+  dia_semana    TEXT    CHECK (dia_semana IN ('domingo','segunda','terca','quarta','quinta','sexta','sabado')),
+  data_fixa     DATE,
+  horario       TEXT    NOT NULL,
   status        TEXT    NOT NULL DEFAULT 'ativo' CHECK (status IN ('ativo', 'pausado', 'agendado')),
   responsavel   TEXT,
   observacao    TEXT,
@@ -327,5 +330,4 @@ CREATE TABLE IF NOT EXISTS regua_disparos (
   FOREIGN KEY (grupo_id) REFERENCES grupos(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_regua_disparos_grupo_id     ON regua_disparos(grupo_id);
-CREATE INDEX IF NOT EXISTS idx_regua_disparos_data_disparo ON regua_disparos(data_disparo);
+CREATE INDEX IF NOT EXISTS idx_regua_disparos_grupo_id ON regua_disparos(grupo_id);

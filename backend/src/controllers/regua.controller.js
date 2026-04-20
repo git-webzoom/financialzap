@@ -10,8 +10,7 @@ async function listarGrupos(req, res) {
 
 async function criarGrupo(req, res) {
   try {
-    const grupo = await svc.criarGrupo(req.body)
-    res.status(201).json({ grupo })
+    res.status(201).json({ grupo: await svc.criarGrupo(req.body) })
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message })
   }
@@ -26,36 +25,33 @@ async function excluirGrupo(req, res) {
   }
 }
 
-async function listarRegistros(req, res) {
+async function listarDisparos(req, res) {
   try {
-    const { data, grupo_id, status } = req.query
-    res.json({ registros: await svc.listarRegistros({ data, grupo_id, status }) })
+    res.json({ disparos: await svc.listarDisparosPorGrupo(req.params.grupoId) })
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message })
   }
 }
 
-async function criarRegistro(req, res) {
+async function criarDisparo(req, res) {
   try {
-    const registro = await svc.criarRegistro(req.body)
-    res.status(201).json({ registro })
+    res.status(201).json({ disparo: await svc.criarDisparo(req.params.grupoId, req.body) })
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message })
   }
 }
 
-async function editarRegistro(req, res) {
+async function editarDisparo(req, res) {
   try {
-    const registro = await svc.editarRegistro(Number(req.params.id), req.body)
-    res.json({ registro })
+    res.json({ disparo: await svc.editarDisparo(Number(req.params.id), req.body) })
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message })
   }
 }
 
-async function excluirRegistro(req, res) {
+async function excluirDisparo(req, res) {
   try {
-    await svc.excluirRegistro(Number(req.params.id))
+    await svc.excluirDisparo(Number(req.params.id))
     res.json({ ok: true })
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message })
@@ -70,4 +66,4 @@ async function obterResumo(req, res) {
   }
 }
 
-module.exports = { listarGrupos, criarGrupo, excluirGrupo, listarRegistros, criarRegistro, editarRegistro, excluirRegistro, obterResumo }
+module.exports = { listarGrupos, criarGrupo, excluirGrupo, listarDisparos, criarDisparo, editarDisparo, excluirDisparo, obterResumo }

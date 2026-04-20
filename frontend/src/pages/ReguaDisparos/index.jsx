@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { useRegua } from '../../hooks/useRegua'
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -31,29 +31,32 @@ function IconX() {
     </svg>
   )
 }
-function IconChevron({ open }) {
+function IconArrowLeft() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
-      <path d="M2 4.5l5 5 5-5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
-  )
-}
-function IconGroup() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-      <rect x="1" y="3" width="5" height="8" rx="1" stroke="currentColor" strokeWidth="1.4"/>
-      <rect x="8" y="3" width="5" height="8" rx="1" stroke="currentColor" strokeWidth="1.4"/>
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   )
 }
 
-// ─── Status config ────────────────────────────────────────────────────────────
+// ─── Status / tipo configs ────────────────────────────────────────────────────
 
 const STATUS_CFG = {
   ativo:    { label: 'Ativo',    color: '#22c55e', bg: '#22c55e18', border: '#22c55e40' },
   pausado:  { label: 'Pausado',  color: '#ef4444', bg: '#ef444418', border: '#ef444440' },
   agendado: { label: 'Agendado', color: '#f59e0b', bg: '#f59e0b18', border: '#f59e0b40' },
 }
+
+const TIPO_CFG = {
+  recorrente: { label: 'Recorrente', color: '#3b82f6', bg: '#3b82f618', border: '#3b82f640' },
+  avulso:     { label: 'Avulso',     color: '#a855f7', bg: '#a855f718', border: '#a855f740' },
+}
+
+const DIA_LABELS = {
+  domingo: 'Domingo', segunda: 'Segunda', terca: 'Terça',
+  quarta: 'Quarta', quinta: 'Quinta', sexta: 'Sexta', sabado: 'Sábado',
+}
+const DIAS_OPTIONS = Object.entries(DIA_LABELS)
 
 function StatusBadge({ status }) {
   const cfg = STATUS_CFG[status] ?? { label: status, color: '#8a94a6', bg: '#8a94a615', border: '#8a94a630' }
@@ -65,14 +68,23 @@ function StatusBadge({ status }) {
   )
 }
 
+function TipoBadge({ tipo }) {
+  const cfg = TIPO_CFG[tipo] ?? TIPO_CFG.recorrente
+  return (
+    <span className="rg-badge" style={{ color: cfg.color, background: cfg.bg, borderColor: cfg.border }}>
+      {cfg.label}
+    </span>
+  )
+}
+
 // ─── Summary Cards ────────────────────────────────────────────────────────────
 
 function SummaryCards({ resumo }) {
   const cards = [
-    { label: 'Total de Registros', value: resumo.total,          color: '#3b82f6', bg: '#3b82f618', border: '#3b82f635' },
-    { label: 'Ativos',             value: resumo.ativos,         color: '#22c55e', bg: '#22c55e18', border: '#22c55e35' },
-    { label: 'Pausados',           value: resumo.pausados,       color: '#ef4444', bg: '#ef444418', border: '#ef444435' },
-    { label: 'Registros Hoje',     value: resumo.registros_hoje, color: '#f59e0b', bg: '#f59e0b18', border: '#f59e0b35' },
+    { label: 'Total de Grupos',     value: resumo.total_grupos,      color: '#3b82f6', bg: '#3b82f618', border: '#3b82f635' },
+    { label: 'Total de Disparos',   value: resumo.total_disparos,    color: '#8a94a6', bg: '#8a94a615', border: '#8a94a630' },
+    { label: 'Disparos Ativos',     value: resumo.disparos_ativos,   color: '#22c55e', bg: '#22c55e18', border: '#22c55e35' },
+    { label: 'Disparos Pausados',   value: resumo.disparos_pausados, color: '#ef4444', bg: '#ef444418', border: '#ef444435' },
   ]
   return (
     <div className="rg-cards">
@@ -86,38 +98,173 @@ function SummaryCards({ resumo }) {
   )
 }
 
-// ─── Registro Form ────────────────────────────────────────────────────────────
+// ─── GrupoForm (modal inline) ─────────────────────────────────────────────────
 
-const EMPTY_REGISTRO = { grupo_id: '', data_disparo: '', regua: '', status: 'ativo', responsavel: '', observacao: '' }
+function GrupoModal({ onCriar, onClose }) {
+  const [form, setForm]     = useState({ nome: '', descricao: '' })
+  const [saving, setSaving] = useState(false)
 
-function RegistroForm({ initial, grupos, onSave, onCancel, saving }) {
+  async function handleCriar() {
+    if (!form.nome.trim()) return
+    setSaving(true)
+    try {
+      await onCriar(form)
+      onClose()
+    } catch (err) {
+      alert(err.response?.data?.error || err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="rg-backdrop" onClick={onClose}>
+      <div className="rg-modal" onClick={e => e.stopPropagation()}>
+        <div className="rg-modal-header">
+          <span>Novo Grupo</span>
+          <button className="rg-icon-btn" onClick={onClose}><IconX /></button>
+        </div>
+        <div className="rg-modal-body">
+          <div className="rg-form-row">
+            <label>Nome *</label>
+            <input
+              value={form.nome}
+              onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
+              placeholder="Nome do grupo"
+              onKeyDown={e => e.key === 'Enter' && handleCriar()}
+              autoFocus
+            />
+          </div>
+          <div className="rg-form-row">
+            <label>Descrição</label>
+            <input
+              value={form.descricao}
+              onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+              placeholder="Descrição opcional"
+            />
+          </div>
+          <div className="rg-form-btns">
+            <button className="rg-btn rg-btn--ghost" onClick={onClose}>Cancelar</button>
+            <button className="rg-btn rg-btn--primary" disabled={saving || !form.nome.trim()} onClick={handleCriar}>
+              {saving ? 'Criando…' : 'Criar grupo'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── GrupoCard ────────────────────────────────────────────────────────────────
+
+function GrupoCard({ grupo, onSelecionar, onExcluir }) {
+  const [excluindo, setExcluindo] = useState(false)
+  const ativos  = Number(grupo.disparos_ativos)  || 0
+  const total   = Number(grupo.total_disparos)   || 0
+  const bloqueado = total > 0
+
+  async function handleExcluir(e) {
+    e.stopPropagation()
+    if (!window.confirm(`Excluir o grupo "${grupo.nome}"? Só é possível se não houver disparos vinculados.`)) return
+    setExcluindo(true)
+    try {
+      await onExcluir(grupo.id)
+    } catch (err) {
+      alert(err.response?.data?.error || err.message)
+    } finally {
+      setExcluindo(false)
+    }
+  }
+
+  return (
+    <div className="rg-grupo-card">
+      <div className="rg-grupo-card-body" onClick={() => onSelecionar(grupo)}>
+        <div className="rg-grupo-card-nome">{grupo.nome}</div>
+        {grupo.descricao && <div className="rg-grupo-card-desc">{grupo.descricao}</div>}
+        <div className="rg-grupo-card-stats">
+          <span className="rg-grupo-stat rg-grupo-stat--green">
+            <span className="rg-dot" style={{ background: '#22c55e' }} />
+            {ativos} ativo{ativos !== 1 ? 's' : ''}
+          </span>
+          <span className="rg-grupo-stat">
+            {total} disparo{total !== 1 ? 's' : ''} no total
+          </span>
+        </div>
+      </div>
+      <div className="rg-grupo-card-footer">
+        <button className="rg-btn rg-btn--primary rg-btn--sm" onClick={() => onSelecionar(grupo)}>
+          Ver régua →
+        </button>
+        <button
+          className="rg-icon-btn rg-icon-btn--danger"
+          onClick={handleExcluir}
+          disabled={excluindo || bloqueado}
+          title={bloqueado ? 'Remova os disparos antes de excluir' : 'Excluir grupo'}
+        >
+          <IconTrash />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── DisparoForm ──────────────────────────────────────────────────────────────
+
+const EMPTY_DISPARO = { nome: '', tipo: 'recorrente', dia_semana: 'domingo', data_fixa: '', horario: '', status: 'ativo', responsavel: '', observacao: '' }
+
+function DisparoForm({ initial, onSave, onCancel, saving }) {
   const [form, setForm] = useState(initial ? {
-    grupo_id:     initial.grupo_id     ?? '',
-    data_disparo: initial.data_disparo ?? '',
-    regua:        initial.regua        ?? '',
-    status:       initial.status       ?? 'ativo',
-    responsavel:  initial.responsavel  ?? '',
-    observacao:   initial.observacao   ?? '',
-  } : { ...EMPTY_REGISTRO })
+    nome:        initial.nome        ?? '',
+    tipo:        initial.tipo        ?? 'recorrente',
+    dia_semana:  initial.dia_semana  ?? 'domingo',
+    data_fixa:   initial.data_fixa   ?? '',
+    horario:     initial.horario     ?? '',
+    status:      initial.status      ?? 'ativo',
+    responsavel: initial.responsavel ?? '',
+    observacao:  initial.observacao  ?? '',
+  } : { ...EMPTY_DISPARO })
 
   function field(k) { return e => setForm(f => ({ ...f, [k]: e.target.value })) }
 
-  const canSave = form.grupo_id && form.data_disparo && form.regua.trim()
+  const canSave = form.nome.trim() && form.horario &&
+    (form.tipo === 'recorrente' ? !!form.dia_semana : !!form.data_fixa)
 
   return (
     <div className="rg-form">
-      <div className="rg-form-grid">
+      <div className="rg-form-grid rg-form-grid--3">
         <div className="rg-form-row">
-          <label>Data do disparo *</label>
-          <input type="date" value={form.data_disparo} onChange={field('data_disparo')} />
+          <label>Nome do disparo *</label>
+          <input value={form.nome} onChange={field('nome')} placeholder="Ex: Disparo Domingo Manhã" />
         </div>
         <div className="rg-form-row">
-          <label>Grupo *</label>
-          <select value={form.grupo_id} onChange={field('grupo_id')}>
-            <option value="">— Selecione —</option>
-            {grupos.map(g => <option key={g.id} value={g.id}>{g.nome}</option>)}
+          <label>Tipo *</label>
+          <select value={form.tipo} onChange={field('tipo')}>
+            <option value="recorrente">Recorrente (toda semana)</option>
+            <option value="avulso">Avulso (data específica)</option>
           </select>
         </div>
+        <div className="rg-form-row">
+          <label>Horário *</label>
+          <input type="time" value={form.horario} onChange={field('horario')} />
+        </div>
+      </div>
+
+      <div className="rg-form-grid rg-form-grid--4">
+        {form.tipo === 'recorrente' ? (
+          <div className="rg-form-row">
+            <label>Dia da semana *</label>
+            <select value={form.dia_semana} onChange={field('dia_semana')}>
+              {DIAS_OPTIONS.map(([val, lbl]) => (
+                <option key={val} value={val}>{lbl}</option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="rg-form-row">
+            <label>Data *</label>
+            <input type="date" value={form.data_fixa} onChange={field('data_fixa')} />
+          </div>
+        )}
         <div className="rg-form-row">
           <label>Status</label>
           <select value={form.status} onChange={field('status')}>
@@ -130,115 +277,38 @@ function RegistroForm({ initial, grupos, onSave, onCancel, saving }) {
           <label>Responsável</label>
           <input value={form.responsavel} onChange={field('responsavel')} placeholder="Nome do responsável" />
         </div>
+        <div className="rg-form-row">
+          <label>Observação</label>
+          <input value={form.observacao} onChange={field('observacao')} placeholder="Observação opcional" />
+        </div>
       </div>
-      <div className="rg-form-row">
-        <label>Régua de disparo *</label>
-        <textarea value={form.regua} onChange={field('regua')} rows={3} placeholder="Descreva a sequência, horários, mensagens, configurações..." />
-      </div>
-      <div className="rg-form-row">
-        <label>Observação</label>
-        <input value={form.observacao} onChange={field('observacao')} placeholder="Motivo de pausa, ajuste de estratégia, etc." />
-      </div>
+
       <div className="rg-form-btns">
         <button type="button" className="rg-btn rg-btn--ghost" onClick={onCancel}>Cancelar</button>
         <button type="button" className="rg-btn rg-btn--primary" disabled={saving || !canSave} onClick={() => onSave(form)}>
-          {saving ? 'Salvando…' : initial ? 'Atualizar' : 'Registrar'}
+          {saving ? 'Salvando…' : initial ? 'Atualizar' : 'Adicionar disparo'}
         </button>
       </div>
     </div>
   )
 }
 
-// ─── Grupo Modal ──────────────────────────────────────────────────────────────
+// ─── DisparosTable ────────────────────────────────────────────────────────────
 
-function GrupoModal({ grupos, onCriar, onExcluir, onClose }) {
-  const [form, setForm]   = useState({ nome: '', descricao: '' })
-  const [saving, setSaving] = useState(false)
-
-  async function handleCriar() {
-    if (!form.nome.trim()) return
-    setSaving(true)
-    try {
-      await onCriar(form)
-      setForm({ nome: '', descricao: '' })
-    } catch (err) {
-      alert(err.response?.data?.error || err.message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function handleExcluir(id) {
-    if (!window.confirm('Excluir este grupo? Só é possível se não houver registros vinculados.')) return
-    try { await onExcluir(id) }
-    catch (err) { alert(err.response?.data?.error || err.message) }
-  }
-
-  return (
-    <div className="rg-backdrop" onClick={onClose}>
-      <div className="rg-modal" onClick={e => e.stopPropagation()}>
-        <div className="rg-modal-header">
-          <span>Gerenciar Grupos</span>
-          <button className="rg-icon-btn" onClick={onClose}><IconX /></button>
-        </div>
-        <div className="rg-modal-body">
-          <div className="rg-grupo-form">
-            <input
-              className="rg-grupo-input"
-              value={form.nome}
-              onChange={e => setForm(f => ({ ...f, nome: e.target.value }))}
-              placeholder="Nome do grupo *"
-              onKeyDown={e => e.key === 'Enter' && handleCriar()}
-            />
-            <input
-              className="rg-grupo-input"
-              value={form.descricao}
-              onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
-              placeholder="Descrição (opcional)"
-            />
-            <button type="button" className="rg-btn rg-btn--primary" disabled={saving || !form.nome.trim()} onClick={handleCriar}>
-              {saving ? '…' : <><IconPlus /> Criar</>}
-            </button>
-          </div>
-
-          {grupos.length === 0 && (
-            <div className="rg-empty">Nenhum grupo cadastrado.</div>
-          )}
-          <div className="rg-grupo-list">
-            {grupos.map(g => (
-              <div key={g.id} className="rg-grupo-item">
-                <div className="rg-grupo-info">
-                  <span className="rg-grupo-nome">{g.nome}</span>
-                  {g.descricao && <span className="rg-grupo-desc">{g.descricao}</span>}
-                  <span className="rg-grupo-count">{g.total_registros ?? 0} registro{g.total_registros !== 1 ? 's' : ''}</span>
-                </div>
-                <button
-                  className="rg-icon-btn rg-icon-btn--danger"
-                  onClick={() => handleExcluir(g.id)}
-                  title={g.total_registros > 0 ? 'Remova os registros antes de excluir' : 'Excluir grupo'}
-                  disabled={Number(g.total_registros) > 0}
-                >
-                  <IconTrash />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Tabela de registros ──────────────────────────────────────────────────────
-
-function ReguaTable({ registros, onEditar, onExcluir }) {
-  if (registros.length === 0) {
-    return <div className="rg-empty">Nenhum registro encontrado.</div>
-  }
+function DisparosTable({ disparos, onEditar, onExcluir }) {
   function fmtData(str) {
     if (!str) return '—'
     const [y, m, d] = str.split('-')
     return `${d}/${m}/${y}`
+  }
+
+  if (disparos.length === 0) {
+    return (
+      <div className="rg-empty">
+        <div>Nenhum disparo configurado para este grupo.</div>
+        <div style={{ marginTop: 8, fontSize: 12, color: '#4a5568' }}>Clique em "Adicionar disparo" para começar.</div>
+      </div>
+    )
   }
 
   return (
@@ -246,28 +316,33 @@ function ReguaTable({ registros, onEditar, onExcluir }) {
       <table className="rg-table">
         <thead>
           <tr>
-            <th>Data</th>
-            <th>Grupo</th>
-            <th>Régua</th>
+            <th>Nome</th>
+            <th>Tipo</th>
+            <th>Quando</th>
+            <th>Horário</th>
             <th>Status</th>
             <th>Responsável</th>
-            <th>Observação</th>
             <th>Ações</th>
           </tr>
         </thead>
         <tbody>
-          {registros.map(r => (
-            <tr key={r.id} className="rg-row">
-              <td className="rg-td rg-td--date">{fmtData(r.data_disparo)}</td>
-              <td className="rg-td"><span className="rg-grupo-tag">{r.grupo_nome}</span></td>
-              <td className="rg-td rg-td--regua">{r.regua}</td>
-              <td className="rg-td"><StatusBadge status={r.status} /></td>
-              <td className="rg-td">{r.responsavel || <span className="rg-dash">—</span>}</td>
-              <td className="rg-td rg-td--obs">{r.observacao || <span className="rg-dash">—</span>}</td>
+          {disparos.map(d => (
+            <tr key={d.id} className="rg-row">
+              <td className="rg-td rg-td--nome">{d.nome}</td>
+              <td className="rg-td"><TipoBadge tipo={d.tipo} /></td>
+              <td className="rg-td rg-td--quando">
+                {d.tipo === 'recorrente'
+                  ? (DIA_LABELS[d.dia_semana] ?? d.dia_semana)
+                  : fmtData(d.data_fixa)
+                }
+              </td>
+              <td className="rg-td rg-td--horario">{d.horario}</td>
+              <td className="rg-td"><StatusBadge status={d.status} /></td>
+              <td className="rg-td">{d.responsavel || <span className="rg-dash">—</span>}</td>
               <td className="rg-td">
                 <div className="rg-actions">
-                  <button className="rg-icon-btn" onClick={() => onEditar(r)} title="Editar"><IconEdit /></button>
-                  <button className="rg-icon-btn rg-icon-btn--danger" onClick={() => onExcluir(r.id)} title="Excluir"><IconTrash /></button>
+                  <button className="rg-icon-btn" onClick={() => onEditar(d)} title="Editar"><IconEdit /></button>
+                  <button className="rg-icon-btn rg-icon-btn--danger" onClick={() => onExcluir(d.id)} title="Excluir"><IconTrash /></button>
                 </div>
               </td>
             </tr>
@@ -282,52 +357,30 @@ function ReguaTable({ registros, onEditar, onExcluir }) {
 
 export default function ReguaDisparos() {
   const {
-    grupos, registros, resumo, loading, error,
-    fetchGrupos, criarGrupo, excluirGrupo,
-    fetchRegistros, criarRegistro, editarRegistro, excluirRegistro,
-    fetchResumo,
+    grupos, grupoSelecionado, disparos, resumo, loading, error,
+    fetchGrupos, criarGrupo, excluirGrupo, selecionarGrupo,
+    criarDisparo, editarDisparo, excluirDisparo,
+    fetchResumo, setGrupoSelecionado,
   } = useRegua()
 
-  const [showGrupos,    setShowGrupos]    = useState(false)
-  const [showForm,      setShowForm]      = useState(false)
-  const [editando,      setEditando]      = useState(null)   // registro sendo editado
-  const [saving,        setSaving]        = useState(false)
-
-  // Filtros
-  const [filtroData,   setFiltroData]   = useState('')
-  const [filtroTexto,  setFiltroTexto]  = useState('')
-  const [filtroStatus, setFiltroStatus] = useState('')
+  const [showGrupoModal, setShowGrupoModal] = useState(false)
+  const [showForm,       setShowForm]       = useState(false)
+  const [editando,       setEditando]       = useState(null)
+  const [saving,         setSaving]         = useState(false)
 
   useEffect(() => {
     fetchGrupos()
-    fetchRegistros()
     fetchResumo()
-  }, [fetchGrupos, fetchRegistros, fetchResumo])
+  }, [fetchGrupos, fetchResumo])
 
-  const filtrados = useMemo(() => {
-    let list = registros
-    if (filtroData)   list = list.filter(r => r.data_disparo === filtroData)
-    if (filtroStatus) list = list.filter(r => r.status === filtroStatus)
-    if (filtroTexto.trim()) {
-      const q = filtroTexto.toLowerCase()
-      list = list.filter(r =>
-        (r.grupo_nome    || '').toLowerCase().includes(q) ||
-        (r.regua         || '').toLowerCase().includes(q) ||
-        (r.responsavel   || '').toLowerCase().includes(q) ||
-        (r.observacao    || '').toLowerCase().includes(q)
-      )
-    }
-    return list
-  }, [registros, filtroData, filtroTexto, filtroStatus])
-
-  async function handleSalvar(form) {
+  async function handleSalvarDisparo(form) {
     setSaving(true)
     try {
       if (editando) {
-        await editarRegistro(editando.id, form)
+        await editarDisparo(editando.id, form)
         setEditando(null)
       } else {
-        await criarRegistro(form)
+        await criarDisparo(grupoSelecionado.id, form)
         setShowForm(false)
       }
       fetchResumo()
@@ -338,16 +391,103 @@ export default function ReguaDisparos() {
     }
   }
 
-  async function handleExcluir(id) {
-    if (!window.confirm('Excluir este registro?')) return
+  async function handleExcluirDisparo(id) {
+    if (!window.confirm('Excluir este disparo?')) return
     try {
-      await excluirRegistro(id)
+      await excluirDisparo(id)
       fetchResumo()
     } catch (err) {
       alert(err.response?.data?.error || err.message)
     }
   }
 
+  function handleVoltar() {
+    setGrupoSelecionado(null)
+    setShowForm(false)
+    setEditando(null)
+  }
+
+  function handleEditar(disparo) {
+    setEditando(disparo)
+    setShowForm(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  // ── Estado 2: Régua do grupo selecionado ──
+  if (grupoSelecionado) {
+    return (
+      <>
+        <style>{CSS_STR}</style>
+        <div className="page-root">
+
+          {/* Breadcrumb / voltar */}
+          <div className="rg-breadcrumb">
+            <button className="rg-btn rg-btn--ghost rg-btn--sm" onClick={handleVoltar}>
+              <IconArrowLeft /> Grupos
+            </button>
+            <span className="rg-breadcrumb-sep">/</span>
+            <span className="rg-breadcrumb-current">{grupoSelecionado.nome}</span>
+          </div>
+
+          {/* Header do grupo */}
+          <div className="rg-topbar">
+            <div>
+              <h1 className="rg-page-title">{grupoSelecionado.nome}</h1>
+              {grupoSelecionado.descricao && (
+                <p className="rg-page-sub">{grupoSelecionado.descricao}</p>
+              )}
+            </div>
+            <button
+              className="rg-btn rg-btn--primary"
+              onClick={() => { setShowForm(f => !f); setEditando(null) }}
+            >
+              <IconPlus /> Adicionar disparo
+            </button>
+          </div>
+
+          {/* Formulário inline — novo disparo */}
+          {showForm && !editando && (
+            <div className="rg-inline-form">
+              <div className="rg-inline-form-title">Novo disparo</div>
+              <DisparoForm
+                onSave={handleSalvarDisparo}
+                onCancel={() => setShowForm(false)}
+                saving={saving}
+              />
+            </div>
+          )}
+
+          {/* Formulário inline — editar */}
+          {editando && (
+            <div className="rg-inline-form">
+              <div className="rg-inline-form-title">Editar disparo</div>
+              <DisparoForm
+                initial={editando}
+                onSave={handleSalvarDisparo}
+                onCancel={() => setEditando(null)}
+                saving={saving}
+              />
+            </div>
+          )}
+
+          {error && <div className="rg-error">⚠ {error}</div>}
+
+          {/* Tabela de disparos */}
+          {loading ? (
+            <div className="rg-loading">Carregando…</div>
+          ) : (
+            <DisparosTable
+              disparos={disparos}
+              onEditar={handleEditar}
+              onExcluir={handleExcluirDisparo}
+            />
+          )}
+        </div>
+      </>
+    )
+  }
+
+  // ── Estado 1: Visão geral de grupos ──
   return (
     <>
       <style>{CSS_STR}</style>
@@ -357,99 +497,51 @@ export default function ReguaDisparos() {
         <div className="rg-topbar">
           <div>
             <h1 className="rg-page-title">Régua de Disparos</h1>
-            <p className="rg-page-sub">Auditoria e acompanhamento diário dos disparos por grupo</p>
+            <p className="rg-page-sub">Gerencie os disparos recorrentes e avulsos por grupo</p>
           </div>
-          <div className="rg-topbar-actions">
-            <button className="rg-btn rg-btn--ghost" onClick={() => setShowGrupos(true)}>
-              <IconGroup /> Gerenciar Grupos
-            </button>
-            <button className="rg-btn rg-btn--primary" onClick={() => { setShowForm(f => !f); setEditando(null) }}>
-              <IconPlus /> Registrar disparo
-              <IconChevron open={showForm} />
-            </button>
-          </div>
+          <button className="rg-btn rg-btn--primary" onClick={() => setShowGrupoModal(true)}>
+            <IconPlus /> Novo grupo
+          </button>
         </div>
 
         {/* Summary Cards */}
         <SummaryCards resumo={resumo} />
 
-        {/* Inline form — novo registro */}
-        {showForm && !editando && (
-          <div className="rg-inline-form">
-            <div className="rg-inline-form-title">Novo registro</div>
-            <RegistroForm
-              grupos={grupos}
-              onSave={handleSalvar}
-              onCancel={() => setShowForm(false)}
-              saving={saving}
-            />
-          </div>
-        )}
-
-        {/* Inline form — editar */}
-        {editando && (
-          <div className="rg-inline-form">
-            <div className="rg-inline-form-title">Editar registro</div>
-            <RegistroForm
-              initial={editando}
-              grupos={grupos}
-              onSave={handleSalvar}
-              onCancel={() => setEditando(null)}
-              saving={saving}
-            />
-          </div>
-        )}
-
-        {/* Filtros */}
-        <div className="rg-filters">
-          <input
-            type="date"
-            className="rg-filter-date"
-            value={filtroData}
-            onChange={e => setFiltroData(e.target.value)}
-            title="Filtrar por data"
-          />
-          {filtroData && (
-            <button className="rg-filter-clear" onClick={() => setFiltroData('')} title="Limpar data">
-              <IconX />
-            </button>
-          )}
-          <input
-            className="rg-search"
-            value={filtroTexto}
-            onChange={e => setFiltroTexto(e.target.value)}
-            placeholder="Buscar por grupo, régua, responsável…"
-          />
-          <select className="rg-select" value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}>
-            <option value="">Todos os status</option>
-            <option value="ativo">Ativo</option>
-            <option value="pausado">Pausado</option>
-            <option value="agendado">Agendado</option>
-          </select>
-          <span className="rg-count">{filtrados.length} registro{filtrados.length !== 1 ? 's' : ''}</span>
-        </div>
-
         {error && <div className="rg-error">⚠ {error}</div>}
 
-        {/* Tabela */}
-        {loading ? (
-          <div className="rg-loading">Carregando…</div>
+        {/* Grid de grupos */}
+        {grupos.length === 0 ? (
+          <div className="rg-empty-state">
+            <div className="rg-empty-state-icon">📋</div>
+            <div className="rg-empty-state-title">Nenhum grupo criado</div>
+            <div className="rg-empty-state-sub">Crie um grupo para começar a configurar sua régua de disparos.</div>
+            <button className="rg-btn rg-btn--primary" onClick={() => setShowGrupoModal(true)}>
+              <IconPlus /> Criar primeiro grupo
+            </button>
+          </div>
         ) : (
-          <ReguaTable
-            registros={filtrados}
-            onEditar={r => { setEditando(r); setShowForm(false); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
-            onExcluir={handleExcluir}
-          />
+          <div className="rg-grupos-grid">
+            {grupos.map(g => (
+              <GrupoCard
+                key={g.id}
+                grupo={g}
+                onSelecionar={selecionarGrupo}
+                onExcluir={excluirGrupo}
+              />
+            ))}
+          </div>
         )}
       </div>
 
-      {/* Modal de grupos */}
-      {showGrupos && (
+      {/* Modal novo grupo */}
+      {showGrupoModal && (
         <GrupoModal
-          grupos={grupos}
-          onCriar={criarGrupo}
-          onExcluir={excluirGrupo}
-          onClose={() => setShowGrupos(false)}
+          onCriar={async (payload) => {
+            const g = await criarGrupo(payload)
+            fetchResumo()
+            return g
+          }}
+          onClose={() => setShowGrupoModal(false)}
         />
       )}
     </>
@@ -468,9 +560,20 @@ const CSS_STR = `
   }
   .rg-page-title { font-size: 20px; font-weight: 600; color: #e8edf5; }
   .rg-page-sub   { font-size: 13px; color: #8a94a6; margin-top: 2px; }
-  .rg-topbar-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
-  /* ── Cards ── */
+  /* ── Breadcrumb ── */
+  .rg-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #8a94a6;
+    margin-bottom: -4px;
+  }
+  .rg-breadcrumb-sep     { color: #4a5568; }
+  .rg-breadcrumb-current { color: #e8edf5; font-weight: 500; }
+
+  /* ── Cards de resumo ── */
   .rg-cards {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -490,40 +593,76 @@ const CSS_STR = `
   .rg-card-value { font-size: 28px; font-weight: 700; line-height: 1; }
   .rg-card-label { font-size: 12px; color: #8a94a6; }
 
-  /* ── Filtros ── */
-  .rg-filters {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-    position: relative;
+  /* ── Grid de grupos ── */
+  .rg-grupos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
   }
-  .rg-filter-date,
-  .rg-search,
-  .rg-select {
+
+  .rg-grupo-card {
     background: #141820;
     border: 1px solid #252c38;
-    border-radius: 8px;
-    color: #e8edf5;
-    font-family: inherit;
-    font-size: 13px;
-    padding: 8px 12px;
-    outline: none;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
     transition: border-color 0.15s;
+    overflow: hidden;
   }
-  .rg-filter-date:focus,
-  .rg-search:focus,
-  .rg-select:focus { border-color: #22c55e; }
-  .rg-search { flex: 1; min-width: 220px; }
-  .rg-select { cursor: pointer; }
-  .rg-filter-clear {
-    display: flex; align-items: center; justify-content: center;
-    width: 28px; height: 28px; background: none; border: none;
-    color: #4a5568; cursor: pointer; margin-left: -4px;
-    transition: color 0.12s; flex-shrink: 0;
+  .rg-grupo-card:hover { border-color: #374151; }
+
+  .rg-grupo-card-body {
+    padding: 16px 16px 12px;
+    flex: 1;
+    cursor: pointer;
   }
-  .rg-filter-clear:hover { color: #8a94a6; }
-  .rg-count { font-size: 12px; color: #22c55e; white-space: nowrap; }
+  .rg-grupo-card-nome {
+    font-size: 15px;
+    font-weight: 600;
+    color: #e8edf5;
+    margin-bottom: 4px;
+  }
+  .rg-grupo-card-desc {
+    font-size: 12px;
+    color: #8a94a6;
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
+  .rg-grupo-card-stats {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .rg-grupo-stat {
+    font-size: 12px;
+    color: #4a5568;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .rg-grupo-stat--green { color: #22c55e; }
+
+  .rg-grupo-card-footer {
+    padding: 10px 16px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid #1a2030;
+  }
+
+  /* ── Empty state ── */
+  .rg-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 60px 20px;
+    text-align: center;
+  }
+  .rg-empty-state-icon  { font-size: 36px; }
+  .rg-empty-state-title { font-size: 16px; font-weight: 600; color: #e8edf5; }
+  .rg-empty-state-sub   { font-size: 13px; color: #8a94a6; max-width: 320px; line-height: 1.5; }
 
   /* ── Inline form panel ── */
   .rg-inline-form {
@@ -545,17 +684,23 @@ const CSS_STR = `
   .rg-form { display: flex; flex-direction: column; gap: 12px; }
   .rg-form-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
     gap: 12px;
   }
-  @media (max-width: 900px) { .rg-form-grid { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 500px) { .rg-form-grid { grid-template-columns: 1fr; } }
+  .rg-form-grid--3 { grid-template-columns: repeat(3, 1fr); }
+  .rg-form-grid--4 { grid-template-columns: repeat(4, 1fr); }
+  @media (max-width: 900px) {
+    .rg-form-grid--3 { grid-template-columns: repeat(2, 1fr); }
+    .rg-form-grid--4 { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 500px) {
+    .rg-form-grid--3,
+    .rg-form-grid--4 { grid-template-columns: 1fr; }
+  }
 
   .rg-form-row { display: flex; flex-direction: column; gap: 5px; }
   .rg-form-row label { font-size: 11px; color: #8a94a6; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 500; }
   .rg-form-row input,
-  .rg-form-row select,
-  .rg-form-row textarea {
+  .rg-form-row select {
     background: #1a1f28;
     border: 1px solid #252c38;
     border-radius: 7px;
@@ -564,12 +709,10 @@ const CSS_STR = `
     font-family: inherit;
     padding: 8px 11px;
     outline: none;
-    resize: vertical;
     transition: border-color 0.15s;
   }
   .rg-form-row input:focus,
-  .rg-form-row select:focus,
-  .rg-form-row textarea:focus { border-color: #22c55e; }
+  .rg-form-row select:focus { border-color: #22c55e; }
   .rg-form-btns { display: flex; justify-content: flex-end; gap: 8px; padding-top: 4px; }
 
   /* ── Tabela ── */
@@ -596,24 +739,13 @@ const CSS_STR = `
     padding: 10px 14px;
     color: #c4cdd8;
     border-bottom: 1px solid #12161c;
-    vertical-align: top;
+    vertical-align: middle;
   }
-  .rg-td--date { white-space: nowrap; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #8a94a6; }
-  .rg-td--regua { max-width: 280px; word-break: break-word; line-height: 1.5; }
-  .rg-td--obs { max-width: 180px; font-size: 12px; color: #8a94a6; word-break: break-word; }
+  .rg-td--nome   { font-weight: 500; color: #e8edf5; max-width: 220px; }
+  .rg-td--quando { white-space: nowrap; }
+  .rg-td--horario { white-space: nowrap; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #8a94a6; }
   .rg-actions { display: flex; gap: 4px; }
   .rg-dash { color: #4a5568; }
-
-  .rg-grupo-tag {
-    display: inline-block;
-    background: #1a1f28;
-    border: 1px solid #252c38;
-    border-radius: 5px;
-    font-size: 11px;
-    color: #8a94a6;
-    padding: 2px 8px;
-    white-space: nowrap;
-  }
 
   /* ── Badge ── */
   .rg-badge {
@@ -649,6 +781,7 @@ const CSS_STR = `
   .rg-btn--primary:hover:not(:disabled) { background: #16a34a; }
   .rg-btn--ghost { background: #1a1f28; color: #8a94a6; border: 1px solid #252c38; }
   .rg-btn--ghost:hover:not(:disabled) { color: #e8edf5; border-color: #374151; }
+  .rg-btn--sm { padding: 6px 12px; font-size: 12px; }
 
   .rg-icon-btn {
     display: flex; align-items: center; justify-content: center;
@@ -661,7 +794,7 @@ const CSS_STR = `
   .rg-icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
   .rg-icon-btn:disabled:hover { color: #4a5568; background: none; }
 
-  /* ── Modal de grupos ── */
+  /* ── Modal ── */
   .rg-backdrop {
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.7);
@@ -672,8 +805,7 @@ const CSS_STR = `
     background: #0f1215;
     border: 1px solid #252c38;
     border-radius: 14px;
-    width: 100%; max-width: 480px;
-    max-height: 80vh; overflow-y: auto;
+    width: 100%; max-width: 440px;
     box-shadow: 0 24px 64px rgba(0,0,0,0.6);
   }
   .rg-modal-header {
@@ -683,26 +815,6 @@ const CSS_STR = `
     font-size: 15px; font-weight: 600; color: #e8edf5;
   }
   .rg-modal-body { padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
-
-  .rg-grupo-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .rg-grupo-input {
-    flex: 1; min-width: 120px;
-    background: #1a1f28; border: 1px solid #252c38; border-radius: 7px;
-    color: #e8edf5; font-size: 13px; font-family: inherit;
-    padding: 8px 11px; outline: none; transition: border-color 0.15s;
-  }
-  .rg-grupo-input:focus { border-color: #22c55e; }
-
-  .rg-grupo-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
-  .rg-grupo-item {
-    display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    background: #141820; border: 1px solid #252c38; border-radius: 8px;
-    padding: 10px 12px;
-  }
-  .rg-grupo-info { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
-  .rg-grupo-nome { font-size: 13px; font-weight: 600; color: #e8edf5; }
-  .rg-grupo-desc { font-size: 11px; color: #8a94a6; }
-  .rg-grupo-count { font-size: 10px; color: #4a5568; }
 
   /* ── Estados ── */
   .rg-empty   { color: #4a5568; font-size: 13px; padding: 32px 0; text-align: center; }

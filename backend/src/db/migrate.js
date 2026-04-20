@@ -121,6 +121,29 @@ async function migrate() {
   `)
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_bm_card_phones_waba_id ON bm_card_phones(card_waba_id)`)
 
+  // regua_disparos — nova estrutura (disparos por grupo, recorrentes ou avulsos)
+  // Drop a tabela antiga (formato texto livre + data_disparo) e recria com nova estrutura.
+  // Dados antigos são descartados intencionalmente — a lógica de negócio mudou.
+  await db.execute(`DROP TABLE IF EXISTS regua_disparos`)
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS regua_disparos (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      grupo_id      INTEGER NOT NULL,
+      nome          TEXT    NOT NULL,
+      tipo          TEXT    NOT NULL DEFAULT 'recorrente',
+      dia_semana    TEXT,
+      data_fixa     DATE,
+      horario       TEXT    NOT NULL,
+      status        TEXT    NOT NULL DEFAULT 'ativo',
+      responsavel   TEXT,
+      observacao    TEXT,
+      criado_em     DATETIME DEFAULT CURRENT_TIMESTAMP,
+      atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (grupo_id) REFERENCES grupos(id)
+    )
+  `)
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_regua_disparos_grupo_id ON regua_disparos(grupo_id)`)
+
   console.log('[db] Migration complete.')
 }
 

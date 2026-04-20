@@ -2,11 +2,12 @@ import { useState, useCallback } from 'react'
 import * as svc from '../services/reguaService'
 
 export function useRegua() {
-  const [grupos,    setGrupos]    = useState([])
-  const [registros, setRegistros] = useState([])
-  const [resumo,    setResumo]    = useState({ total: 0, ativos: 0, pausados: 0, agendados: 0, registros_hoje: 0 })
-  const [loading,   setLoading]   = useState(false)
-  const [error,     setError]     = useState(null)
+  const [grupos,          setGrupos]          = useState([])
+  const [grupoSelecionado, setGrupoSelecionado] = useState(null)
+  const [disparos,        setDisparos]        = useState([])
+  const [resumo,          setResumo]          = useState({ total_grupos: 0, total_disparos: 0, disparos_ativos: 0, disparos_pausados: 0 })
+  const [loading,         setLoading]         = useState(false)
+  const [error,           setError]           = useState(null)
 
   const fetchGrupos = useCallback(async () => {
     try {
@@ -25,47 +26,66 @@ export function useRegua() {
   const excluirGrupo = useCallback(async (id) => {
     await svc.excluirGrupo(id)
     setGrupos(prev => prev.filter(g => g.id !== id))
-  }, [])
+    if (grupoSelecionado?.id === id) setGrupoSelecionado(null)
+  }, [grupoSelecionado])
 
-  const fetchRegistros = useCallback(async (filtros = {}) => {
+  const selecionarGrupo = useCallback(async (grupo) => {
+    setGrupoSelecionado(grupo)
     setLoading(true)
     setError(null)
     try {
-      setRegistros(await svc.listarRegistros(filtros))
+      setDisparos(await svc.listarDisparos(grupo.id))
     } catch (err) {
-      setError(err.response?.data?.error || 'Erro ao carregar registros')
+      setError(err.response?.data?.error || 'Erro ao carregar disparos')
     } finally {
       setLoading(false)
     }
   }, [])
 
-  const criarRegistro = useCallback(async (payload) => {
-    const registro = await svc.criarRegistro(payload)
-    setRegistros(prev => [registro, ...prev])
-    return registro
+  const fetchDisparos = useCallback(async (grupoId) => {
+    setLoading(true)
+    setError(null)
+    try {
+      setDisparos(await svc.listarDisparos(grupoId))
+    } catch (err) {
+      setError(err.response?.data?.error || 'Erro ao carregar disparos')
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  const editarRegistro = useCallback(async (id, payload) => {
-    const registro = await svc.editarRegistro(id, payload)
-    setRegistros(prev => prev.map(r => r.id === id ? registro : r))
-    return registro
+  const criarDisparo = useCallback(async (grupoId, payload) => {
+    const disparo = await svc.criarDisparo(grupoId, payload)
+    setDisparos(prev => [...prev, disparo])
+    setGrupos(prev => prev.map(g => g.id === grupoId
+      ? { ...g, total_disparos: (Number(g.total_disparos) || 0) + 1, disparos_ativos: disparo.status === 'ativo' ? (Number(g.disparos_ativos) || 0) + 1 : g.disparos_ativos }
+      : g
+    ))
+    return disparo
   }, [])
 
-  const excluirRegistro = useCallback(async (id) => {
-    await svc.excluirRegistro(id)
-    setRegistros(prev => prev.filter(r => r.id !== id))
+  const editarDisparo = useCallback(async (id, payload) => {
+    const disparo = await svc.editarDisparo(id, payload)
+    setDisparos(prev => prev.map(d => d.id === id ? disparo : d))
+    return disparo
+  }, [])
+
+  const excluirDisparo = useCallback(async (id) => {
+    await svc.excluirDisparo(id)
+    setDisparos(prev => prev.filter(d => d.id !== id))
   }, [])
 
   const fetchResumo = useCallback(async () => {
     try {
       setResumo(await svc.obterResumo())
-    } catch { /* resumo é não-crítico */ }
+    } catch { /* não-crítico */ }
   }, [])
 
   return {
-    grupos, registros, resumo, loading, error,
-    fetchGrupos, criarGrupo, excluirGrupo,
-    fetchRegistros, criarRegistro, editarRegistro, excluirRegistro,
+    grupos, grupoSelecionado, disparos, resumo, loading, error,
+    fetchGrupos, criarGrupo, excluirGrupo, selecionarGrupo,
+    fetchDisparos, criarDisparo, editarDisparo, excluirDisparo,
     fetchResumo,
+    setGrupoSelecionado,
   }
 }
