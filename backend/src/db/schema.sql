@@ -229,7 +229,7 @@ CREATE TABLE IF NOT EXISTS number_inventory (
   supplier     TEXT,
   bm_name      TEXT,
   waba_name    TEXT,
-  status       TEXT    NOT NULL DEFAULT 'free' CHECK (status IN ('free', 'in_use', 'reserved')),
+  status       TEXT    NOT NULL DEFAULT 'free' CHECK (status IN ('free', 'in_use', 'reserved', 'com_restricao')),
   notes        TEXT,
   created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP,

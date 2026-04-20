@@ -61,8 +61,8 @@ async function createNumber(userId, { phone_number, origin, supplier, bm_name, w
     throw err
   }
   const resolvedStatus = status || 'free'
-  if (!['free', 'in_use', 'reserved'].includes(resolvedStatus)) {
-    const err = new Error('status deve ser "free", "in_use" ou "reserved"')
+  if (!['free', 'in_use', 'reserved', 'com_restricao'].includes(resolvedStatus)) {
+    const err = new Error('status inválido')
     err.status = 400
     throw err
   }

@@ -121,6 +121,51 @@ async function migrate() {
   `)
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_bm_card_phones_waba_id ON bm_card_phones(card_waba_id)`)
 
+  // ── Corrigir CHECK constraints desatualizados ──────────────────────────────
+  // SQLite não suporta ALTER COLUMN/DROP CONSTRAINT — é preciso recriar a tabela.
+  // Padrão: RENAME → CREATE novo → INSERT SELECT → DROP antigo (idempotente pela coluna sentinela).
+
+  // number_inventory: adicionar 'com_restricao' ao CHECK de status
+  {
+    const { rows: cols } = await db.execute(`PRAGMA table_info(number_inventory)`)
+    const statusCol = cols.find(c => c.name === 'status')
+    // Se a constraint ainda é a antiga (sem com_restricao), recriar a tabela
+    const { rows: ddl } = await db.execute(`SELECT sql FROM sqlite_master WHERE type='table' AND name='number_inventory'`)
+    if (ddl.length && ddl[0].sql && !ddl[0].sql.includes('com_restricao')) {
+      await db.execute(`ALTER TABLE number_inventory RENAME TO _number_inventory_old`)
+      await db.execute(`
+        CREATE TABLE number_inventory (
+          id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id              INTEGER NOT NULL,
+          phone_number         TEXT    NOT NULL,
+          origin               TEXT    NOT NULL CHECK (origin IN ('own', 'rented')),
+          supplier             TEXT,
+          bm_name              TEXT,
+          waba_name            TEXT,
+          status               TEXT    NOT NULL DEFAULT 'free' CHECK (status IN ('free', 'in_use', 'reserved', 'com_restricao')),
+          notes                TEXT,
+          quality_rating       TEXT,
+          messaging_limit_tier TEXT,
+          created_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        )
+      `)
+      await db.execute(`
+        INSERT INTO number_inventory
+          (id, user_id, phone_number, origin, supplier, bm_name, waba_name, status, notes, quality_rating, messaging_limit_tier, created_at, updated_at)
+        SELECT
+          id, user_id, phone_number, origin, supplier, bm_name, waba_name, status, notes, quality_rating, messaging_limit_tier, created_at, updated_at
+        FROM _number_inventory_old
+      `)
+      await db.execute(`DROP TABLE _number_inventory_old`)
+      await db.execute(`CREATE INDEX IF NOT EXISTS idx_number_inventory_user_id ON number_inventory(user_id)`)
+      await db.execute(`CREATE INDEX IF NOT EXISTS idx_number_inventory_status  ON number_inventory(status)`)
+      await db.execute(`CREATE INDEX IF NOT EXISTS idx_number_inventory_origin  ON number_inventory(origin)`)
+      console.log('[db] Rebuilt number_inventory with updated status CHECK')
+    }
+  }
+
   // fluxo_mensagens — renomear de regua_disparos se ainda não foi renomeado
   {
     const { rows: tables } = await db.execute(`SELECT name FROM sqlite_master WHERE type='table'`)
@@ -156,6 +201,45 @@ async function migrate() {
   await addColumnIfMissing(db, 'fluxo_mensagens', 'campanha_grupo', 'TEXT')
   await addColumnIfMissing(db, 'fluxo_mensagens', 'tipo_copy',      'TEXT')
   await addColumnIfMissing(db, 'fluxo_mensagens', 'copy_texto',     'TEXT')
+
+  // fluxo_mensagens: corrigir CHECK de tipo_copy para incluir 'sem_copy'
+  {
+    const { rows: ddl } = await db.execute(`SELECT sql FROM sqlite_master WHERE type='table' AND name='fluxo_mensagens'`)
+    if (ddl.length && ddl[0].sql && ddl[0].sql.includes("tipo_copy") && !ddl[0].sql.includes('sem_copy')) {
+      await db.execute(`ALTER TABLE fluxo_mensagens RENAME TO _fluxo_mensagens_old`)
+      await db.execute(`
+        CREATE TABLE fluxo_mensagens (
+          id            INTEGER PRIMARY KEY AUTOINCREMENT,
+          grupo_id      INTEGER NOT NULL,
+          nome          TEXT    NOT NULL,
+          tipo          TEXT    NOT NULL DEFAULT 'recorrente' CHECK (tipo IN ('recorrente', 'avulso')),
+          dia_semana    TEXT    CHECK (dia_semana IN ('domingo','segunda','terca','quarta','quinta','sexta','sabado')),
+          data_fixa     DATE,
+          horario       TEXT    NOT NULL,
+          ferramenta    TEXT,
+          campanha_grupo TEXT,
+          tipo_copy     TEXT    CHECK (tipo_copy IN ('sem_copy', 'texto', 'video', 'imagem')),
+          copy_texto    TEXT,
+          status        TEXT    NOT NULL DEFAULT 'ativo' CHECK (status IN ('ativo', 'pausado', 'agendado')),
+          responsavel   TEXT,
+          observacao    TEXT,
+          criado_em     DATETIME DEFAULT CURRENT_TIMESTAMP,
+          atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (grupo_id) REFERENCES grupos(id)
+        )
+      `)
+      await db.execute(`
+        INSERT INTO fluxo_mensagens
+          (id, grupo_id, nome, tipo, dia_semana, data_fixa, horario, ferramenta, campanha_grupo, tipo_copy, copy_texto, status, responsavel, observacao, criado_em, atualizado_em)
+        SELECT
+          id, grupo_id, nome, tipo, dia_semana, data_fixa, horario, ferramenta, campanha_grupo, tipo_copy, copy_texto, status, responsavel, observacao, criado_em, atualizado_em
+        FROM _fluxo_mensagens_old
+      `)
+      await db.execute(`DROP TABLE _fluxo_mensagens_old`)
+      await db.execute(`CREATE INDEX IF NOT EXISTS idx_fluxo_mensagens_grupo_id ON fluxo_mensagens(grupo_id)`)
+      console.log('[db] Rebuilt fluxo_mensagens with updated tipo_copy CHECK')
+    }
+  }
 
   console.log('[db] Migration complete.')
 }
