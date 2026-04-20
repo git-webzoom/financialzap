@@ -1,6 +1,6 @@
 const { getDb } = require('../db/database')
 
-const TIER_LIMITS = { TIER_1: 1000, TIER_2: 10000, TIER_3: 100000, TIER_4: null }
+const TIER_LIMITS = { TIER_1: 250, TIER_2: 2000, TIER_3: 10000, TIER_4: 100000 }
 
 // ─── Numbers ──────────────────────────────────────────────────────────────────
 
@@ -23,7 +23,7 @@ async function listNumbers(userId, filters = {}) {
 
   // Attach automations (with daily_volume) to each number
   const { rows: autoRows } = await db.execute({
-    sql: `SELECT na.id, na.number_id, na.automation_name, na.template_name, na.daily_volume
+    sql: `SELECT na.id, na.number_id, na.automation_name, na.tool_name, na.daily_volume
           FROM number_automations na
           JOIN number_inventory ni ON ni.id = na.number_id
           WHERE ni.user_id = ?
@@ -31,15 +31,13 @@ async function listNumbers(userId, filters = {}) {
     args: [userId],
   })
 
+  const rawAutos = autoRows.map(a => ({ id: a.id, number_id: a.number_id, automation_name: a.automation_name, tool_name: a.tool_name, daily_volume: a.daily_volume ?? 0 }))
+  const autosWithTemplates = await _attachTemplates(db, rawAutos)
+
   const autosByNumber = {}
-  for (const a of autoRows) {
+  for (const a of autosWithTemplates) {
     if (!autosByNumber[a.number_id]) autosByNumber[a.number_id] = []
-    autosByNumber[a.number_id].push({
-      id: a.id,
-      automation_name: a.automation_name,
-      template_name: a.template_name,
-      daily_volume: a.daily_volume ?? 0,
-    })
+    autosByNumber[a.number_id].push(a)
   }
 
   return rows.map(r => {
@@ -123,11 +121,12 @@ async function updateNumber(userId, numberId, fields) {
     args: [numberId],
   })
   const { rows: autoRows } = await db.execute({
-    sql: 'SELECT id, automation_name, template_name, daily_volume FROM number_automations WHERE number_id = ? ORDER BY created_at ASC',
+    sql: 'SELECT id, automation_name, tool_name, daily_volume FROM number_automations WHERE number_id = ? ORDER BY created_at ASC',
     args: [numberId],
   })
   const r = updated[0]
-  const automations = autoRows.map(a => ({ ...a, daily_volume: a.daily_volume ?? 0 }))
+  const rawAutos = autoRows.map(a => ({ ...a, daily_volume: a.daily_volume ?? 0 }))
+  const automations = await _attachTemplates(db, rawAutos)
   const total_daily_volume = automations.reduce((sum, a) => sum + a.daily_volume, 0)
   return { ...r, automations, total_daily_volume, tier_limit: TIER_LIMITS[r.messaging_limit_tier] ?? null }
 }
@@ -151,16 +150,33 @@ async function deleteNumber(userId, numberId) {
 
 // ─── Automations ──────────────────────────────────────────────────────────────
 
+async function _attachTemplates(db, automations) {
+  if (!automations.length) return automations
+  const ids = automations.map(a => a.id)
+  const placeholders = ids.map(() => '?').join(',')
+  const { rows } = await db.execute({
+    sql: `SELECT * FROM automation_templates WHERE automation_id IN (${placeholders}) ORDER BY created_at ASC`,
+    args: ids,
+  })
+  const byAuto = {}
+  for (const t of rows) {
+    if (!byAuto[t.automation_id]) byAuto[t.automation_id] = []
+    byAuto[t.automation_id].push({ id: t.id, template_name: t.template_name })
+  }
+  return automations.map(a => ({ ...a, templates: byAuto[a.id] ?? [] }))
+}
+
 async function listAutomations(numberId) {
   const db = getDb()
   const { rows } = await db.execute({
-    sql: 'SELECT id, automation_name, template_name, daily_volume, created_at, updated_at FROM number_automations WHERE number_id = ? ORDER BY created_at ASC',
+    sql: 'SELECT id, automation_name, tool_name, daily_volume, created_at, updated_at FROM number_automations WHERE number_id = ? ORDER BY created_at ASC',
     args: [numberId],
   })
-  return rows.map(r => ({ ...r, daily_volume: r.daily_volume ?? 0 }))
+  const autos = rows.map(r => ({ ...r, daily_volume: r.daily_volume ?? 0 }))
+  return _attachTemplates(db, autos)
 }
 
-async function createAutomation(numberId, { automation_name, template_name, daily_volume }) {
+async function createAutomation(numberId, { automation_name, daily_volume, tool_name }) {
   const db = getDb()
   if (!automation_name) {
     const err = new Error('automation_name é obrigatório')
@@ -169,17 +185,18 @@ async function createAutomation(numberId, { automation_name, template_name, dail
   }
   const now = new Date().toISOString()
   const { lastInsertRowid } = await db.execute({
-    sql: 'INSERT INTO number_automations (number_id, automation_name, template_name, daily_volume, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-    args: [numberId, automation_name, template_name ?? null, daily_volume ?? 0, now, now],
+    sql: 'INSERT INTO number_automations (number_id, automation_name, daily_volume, tool_name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+    args: [numberId, automation_name, daily_volume ?? 0, tool_name ?? null, now, now],
   })
   const { rows } = await db.execute({
     sql: 'SELECT * FROM number_automations WHERE id = ?',
     args: [lastInsertRowid],
   })
-  return { ...rows[0], daily_volume: rows[0].daily_volume ?? 0 }
+  const [auto] = await _attachTemplates(db, [{ ...rows[0], daily_volume: rows[0].daily_volume ?? 0 }])
+  return auto
 }
 
-async function updateAutomation(automationId, { automation_name, template_name, daily_volume }) {
+async function updateAutomation(automationId, { automation_name, daily_volume, tool_name }) {
   const db = getDb()
   const { rows } = await db.execute({
     sql: 'SELECT * FROM number_automations WHERE id = ?',
@@ -192,19 +209,46 @@ async function updateAutomation(automationId, { automation_name, template_name, 
   }
   const current = rows[0]
   const now = new Date().toISOString()
-  const newName     = automation_name !== undefined ? automation_name : current.automation_name
-  const newTemplate = template_name   !== undefined ? template_name   : current.template_name
-  const newVolume   = daily_volume    !== undefined ? daily_volume    : current.daily_volume
+  const newName   = automation_name !== undefined ? automation_name : current.automation_name
+  const newVolume = daily_volume    !== undefined ? daily_volume    : current.daily_volume
+  const newTool   = tool_name       !== undefined ? tool_name       : current.tool_name
 
   await db.execute({
-    sql: 'UPDATE number_automations SET automation_name = ?, template_name = ?, daily_volume = ?, updated_at = ? WHERE id = ?',
-    args: [newName, newTemplate, newVolume ?? 0, now, automationId],
+    sql: 'UPDATE number_automations SET automation_name = ?, daily_volume = ?, tool_name = ?, updated_at = ? WHERE id = ?',
+    args: [newName, newVolume ?? 0, newTool ?? null, now, automationId],
   })
   const { rows: updated } = await db.execute({
     sql: 'SELECT * FROM number_automations WHERE id = ?',
     args: [automationId],
   })
-  return { ...updated[0], daily_volume: updated[0].daily_volume ?? 0 }
+  const [auto] = await _attachTemplates(db, [{ ...updated[0], daily_volume: updated[0].daily_volume ?? 0 }])
+  return auto
+}
+
+async function createTemplate(automationId, templateName) {
+  const db = getDb()
+  if (!templateName?.trim()) {
+    const err = new Error('template_name é obrigatório')
+    err.status = 400
+    throw err
+  }
+  const { lastInsertRowid } = await db.execute({
+    sql: 'INSERT INTO automation_templates (automation_id, template_name) VALUES (?, ?)',
+    args: [automationId, templateName.trim()],
+  })
+  const { rows } = await db.execute({
+    sql: 'SELECT * FROM automation_templates WHERE id = ?',
+    args: [lastInsertRowid],
+  })
+  return { id: rows[0].id, template_name: rows[0].template_name }
+}
+
+async function deleteTemplate(automationId, templateId) {
+  const db = getDb()
+  await db.execute({
+    sql: 'DELETE FROM automation_templates WHERE id = ? AND automation_id = ?',
+    args: [templateId, automationId],
+  })
 }
 
 async function deleteAutomation(automationId) {
@@ -303,5 +347,6 @@ async function deleteHealthLog(userId, numberId, logId) {
 module.exports = {
   listNumbers, createNumber, updateNumber, deleteNumber,
   listAutomations, createAutomation, updateAutomation, deleteAutomation,
+  createTemplate, deleteTemplate,
   listHealthLogs, createHealthLog, deleteHealthLog,
 }

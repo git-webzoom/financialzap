@@ -11,10 +11,14 @@ router.patch('/:id', ctrl.updateNumber)
 router.delete('/:id', ctrl.deleteNumber)
 
 // Automations (nested under number)
-router.get('/:numberId/automations',         ctrl.listAutomations)
-router.post('/:numberId/automations',        ctrl.createAutomation)
-router.patch('/:numberId/automations/:id',   ctrl.updateAutomation)
-router.delete('/:numberId/automations/:id',  ctrl.deleteAutomation)
+router.get('/:numberId/automations',                                      ctrl.listAutomations)
+router.post('/:numberId/automations',                                     ctrl.createAutomation)
+router.patch('/:numberId/automations/:id',                                ctrl.updateAutomation)
+router.delete('/:numberId/automations/:id',                               ctrl.deleteAutomation)
+
+// Templates (nested under automation)
+router.post('/:numberId/automations/:automationId/templates',             ctrl.createTemplate)
+router.delete('/:numberId/automations/:automationId/templates/:templateId', ctrl.deleteTemplate)
 
 // Health Logs (nested under number)
 router.get('/:numberId/health-logs',         ctrl.listHealthLogs)

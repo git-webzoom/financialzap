@@ -42,6 +42,17 @@ export async function deleteAutomation(numberId, automationId) {
   await api.delete(`/api/inventory/${numberId}/automations/${automationId}`)
 }
 
+// ─── Templates ────────────────────────────────────────────────────────────────
+
+export async function createTemplate(numberId, automationId, templateName) {
+  const { data } = await api.post(`/api/inventory/${numberId}/automations/${automationId}/templates`, { template_name: templateName })
+  return data.template
+}
+
+export async function deleteTemplate(numberId, automationId, templateId) {
+  await api.delete(`/api/inventory/${numberId}/automations/${automationId}/templates/${templateId}`)
+}
+
 // ─── Health Logs ──────────────────────────────────────────────────────────────
 
 export async function listHealthLogs(numberId) {

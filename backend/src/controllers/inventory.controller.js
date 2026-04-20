@@ -71,10 +71,34 @@ async function createAutomation(req, res) {
   try {
     const numberId = Number(req.params.numberId)
     await assertNumberOwnership(req.user.sub, numberId)
-    const { automation_name, template_name, daily_volume } = req.body
+    const { automation_name, daily_volume, tool_name } = req.body
     if (!automation_name) return res.status(400).json({ error: 'automation_name é obrigatório' })
-    const auto = await inventory.createAutomation(numberId, { automation_name, template_name, daily_volume })
+    const auto = await inventory.createAutomation(numberId, { automation_name, daily_volume, tool_name })
     res.status(201).json({ automation: auto })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message })
+  }
+}
+
+async function createTemplate(req, res) {
+  try {
+    const numberId     = Number(req.params.numberId)
+    const automationId = Number(req.params.automationId)
+    await assertNumberOwnership(req.user.sub, numberId)
+    const template = await inventory.createTemplate(automationId, req.body.template_name)
+    res.status(201).json({ template })
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message })
+  }
+}
+
+async function deleteTemplate(req, res) {
+  try {
+    const numberId     = Number(req.params.numberId)
+    const automationId = Number(req.params.automationId)
+    await assertNumberOwnership(req.user.sub, numberId)
+    await inventory.deleteTemplate(automationId, Number(req.params.templateId))
+    res.json({ ok: true })
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message })
   }
@@ -137,5 +161,6 @@ async function deleteHealthLog(req, res) {
 module.exports = {
   listNumbers, createNumber, updateNumber, deleteNumber,
   listAutomations, createAutomation, updateAutomation, deleteAutomation,
+  createTemplate, deleteTemplate,
   listHealthLogs, createHealthLog, deleteHealthLog,
 }

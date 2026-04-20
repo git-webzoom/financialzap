@@ -82,6 +82,19 @@ async function migrate() {
 
   // Melhoria 3 — volume diário por automação
   await addColumnIfMissing(db, 'number_automations', 'daily_volume', 'INTEGER DEFAULT 0')
+  await addColumnIfMissing(db, 'number_automations', 'tool_name',    'TEXT')
+
+  // automation_templates — múltiplos templates por automação
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS automation_templates (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      automation_id INTEGER NOT NULL,
+      template_name TEXT    NOT NULL,
+      created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (automation_id) REFERENCES number_automations(id) ON DELETE CASCADE
+    )
+  `)
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_automation_templates_auto_id ON automation_templates(automation_id)`)
 
   // Melhoria 4 — moved_at nos cards do Kanban (NULL = nunca movido; usamos updated_at como fallback no front)
   await addColumnIfMissing(db, 'bm_cards', 'moved_at',   'DATETIME')

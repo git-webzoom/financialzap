@@ -64,10 +64,10 @@ const QUALITY_CFG = {
 }
 
 const TIER_LABELS = {
-  TIER_1: 'Tier 1 (1k/dia)',
-  TIER_2: 'Tier 2 (10k/dia)',
-  TIER_3: 'Tier 3 (100k/dia)',
-  TIER_4: 'Tier 4 (ilimitado)',
+  TIER_1: 'Tier 1 (250/dia)',
+  TIER_2: 'Tier 2 (2k/dia)',
+  TIER_3: 'Tier 3 (10k/dia)',
+  TIER_4: 'Tier 4 (100k/dia)',
 }
 
 const HEALTH_EVENT_CFG = {
@@ -270,10 +270,10 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
                   <label>Tier de limite</label>
                   <select value={form.messaging_limit_tier || ''} onChange={field('messaging_limit_tier')}>
                     <option value="">— Não definido —</option>
-                    <option value="TIER_1">Tier 1 (1k/dia)</option>
-                    <option value="TIER_2">Tier 2 (10k/dia)</option>
-                    <option value="TIER_3">Tier 3 (100k/dia)</option>
-                    <option value="TIER_4">Tier 4 (ilimitado)</option>
+                    <option value="TIER_1">Tier 1 (250/dia)</option>
+                    <option value="TIER_2">Tier 2 (2k/dia)</option>
+                    <option value="TIER_3">Tier 3 (10k/dia)</option>
+                    <option value="TIER_4">Tier 4 (100k/dia)</option>
                   </select>
                 </div>
               </div>
@@ -316,7 +316,8 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
                   <thead>
                     <tr>
                       <th>Automação</th>
-                      <th>Template</th>
+                      <th>Ferramenta</th>
+                      <th>Templates</th>
                       <th>Vol./dia</th>
                       <th>Ações</th>
                     </tr>
@@ -326,7 +327,17 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
                       <>
                         <tr key={a.id} className="auto-row">
                           <td className="auto-td">{a.automation_name}</td>
-                          <td className="auto-td auto-mono">{a.template_name || <span className="inv-dash">—</span>}</td>
+                          <td className="auto-td">{a.tool_name || <span className="inv-dash">—</span>}</td>
+                          <td className="auto-td">
+                            <TemplatesInline
+                              automation={a}
+                              numberId={effectiveNumber.id}
+                              onChange={updated => {
+                                const next = automations.map(x => x.id === updated.id ? updated : x)
+                                setAutos(next)
+                              }}
+                            />
+                          </td>
                           <td className="auto-td">{a.daily_volume > 0 ? a.daily_volume.toLocaleString() : <span className="inv-dash">—</span>}</td>
                           <td className="auto-td">
                             <div className="inv-actions">
@@ -337,7 +348,7 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
                         </tr>
                         {editingAuto === a.id && (
                           <tr key={`edit-${a.id}`}>
-                            <td colSpan={4} className="auto-td-form">
+                            <td colSpan={5} className="auto-td-form">
                               <AutoForm initial={a} onSave={(f) => handleUpdateAuto(a.id, f)} onCancel={() => setEditingAuto(null)} />
                             </td>
                           </tr>
@@ -362,14 +373,14 @@ function NumberModal({ initial, onSave, onClose, onNumberUpdated }) {
 // ─── Automation form (inline) ─────────────────────────────────────────────────
 
 function AutoForm({ initial, onSave, onCancel }) {
-  const [form, setForm]     = useState(initial
-    ? { automation_name: initial.automation_name, template_name: initial.template_name || '', daily_volume: initial.daily_volume ?? 0 }
-    : { automation_name: '', template_name: '', daily_volume: 0 }
+  const [form, setForm] = useState(initial
+    ? { automation_name: initial.automation_name, tool_name: initial.tool_name || '', daily_volume: initial.daily_volume ?? 0 }
+    : { automation_name: '', tool_name: '', daily_volume: 0 }
   )
   const [saving, setSaving] = useState(false)
 
   async function handleSave() {
-    if (!form.automation_name.trim() || !form.template_name.trim()) return
+    if (!form.automation_name.trim()) return
     setSaving(true)
     try {
       await onSave({ ...form, daily_volume: Number(form.daily_volume) || 0 })
@@ -391,9 +402,9 @@ function AutoForm({ initial, onSave, onCancel }) {
         />
         <input
           className="auto-input"
-          value={form.template_name}
-          onChange={e => setForm(f => ({ ...f, template_name: e.target.value }))}
-          placeholder="Nome do template *"
+          value={form.tool_name}
+          onChange={e => setForm(f => ({ ...f, tool_name: e.target.value }))}
+          placeholder="Ferramenta (ex: n8n, Make...)"
         />
         <input
           className="auto-input"
@@ -405,10 +416,79 @@ function AutoForm({ initial, onSave, onCancel }) {
         />
       </div>
       <div className="auto-form-btns">
-        <button type="button" className="inv-btn inv-btn--primary inv-btn--sm" disabled={saving || !form.automation_name.trim() || !form.template_name.trim()} onClick={handleSave}>
+        <button type="button" className="inv-btn inv-btn--primary inv-btn--sm" disabled={saving || !form.automation_name.trim()} onClick={handleSave}>
           {saving ? 'Salvando…' : 'Salvar'}
         </button>
         <button type="button" className="inv-btn inv-btn--ghost inv-btn--sm" onClick={onCancel}>Cancelar</button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Templates inline (dentro de cada automação) ─────────────────────────────
+
+function TemplatesInline({ automation, numberId, onChange }) {
+  const [adding, setAdding]   = useState(false)
+  const [newName, setNewName] = useState('')
+  const [saving, setSaving]   = useState(false)
+  const templates = automation.templates ?? []
+
+  async function handleAdd() {
+    if (!newName.trim()) return
+    setSaving(true)
+    try {
+      const t = await inventoryService.createTemplate(numberId, automation.id, newName.trim())
+      onChange({ ...automation, templates: [...templates, t] })
+      setNewName('')
+      setAdding(false)
+    } catch (err) {
+      alert(err.response?.data?.error || err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete(templateId) {
+    try {
+      await inventoryService.deleteTemplate(numberId, automation.id, templateId)
+      onChange({ ...automation, templates: templates.filter(t => t.id !== templateId) })
+    } catch (err) {
+      alert(err.response?.data?.error || err.message)
+    }
+  }
+
+  return (
+    <div className="auto-templates">
+      <div className="auto-templates-list">
+        {templates.length === 0 && !adding && (
+          <span className="inv-dash" style={{ fontSize: 11 }}>Nenhum template</span>
+        )}
+        {templates.map(t => (
+          <span key={t.id} className="auto-template-tag">
+            {t.template_name}
+            <button type="button" className="auto-template-del" onClick={() => handleDelete(t.id)} title="Remover">×</button>
+          </span>
+        ))}
+        {adding ? (
+          <div className="auto-template-add-row">
+            <input
+              className="auto-input auto-input--sm"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              placeholder="Nome do template"
+              autoFocus
+              onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') { setAdding(false); setNewName('') } }}
+            />
+            <button type="button" className="inv-btn inv-btn--primary inv-btn--sm" disabled={saving || !newName.trim()} onClick={handleAdd}>
+              {saving ? '…' : 'Add'}
+            </button>
+            <button type="button" className="inv-btn inv-btn--ghost inv-btn--sm" onClick={() => { setAdding(false); setNewName('') }}>✕</button>
+          </div>
+        ) : (
+          <button type="button" className="auto-template-add-btn" onClick={() => setAdding(true)}>
+            <IconPlus /> template
+          </button>
+        )}
       </div>
     </div>
   )
@@ -497,7 +577,7 @@ function DetailDrawer({ number: initialNumber, onClose, onNumberUpdated }) {
   }, [initialNumber.id])
 
   // Recalculate totals from live automations list
-  const tierLimit = { TIER_1: 1000, TIER_2: 10000, TIER_3: 100000, TIER_4: null }[number.messaging_limit_tier] ?? null
+  const tierLimit = { TIER_1: 250, TIER_2: 2000, TIER_3: 10000, TIER_4: 100000 }[number.messaging_limit_tier] ?? null
   const totalVolume = automations.reduce((s, a) => s + (a.daily_volume ?? 0), 0)
   const volumePercent = tierLimit !== null ? Math.min(100, (totalVolume / tierLimit) * 100) : 0
   const volumeOver = tierLimit !== null && totalVolume > tierLimit
@@ -607,10 +687,10 @@ function DetailDrawer({ number: initialNumber, onClose, onNumberUpdated }) {
                   <label>Tier de limite</label>
                   <select value={editForm.messaging_limit_tier || ''} onChange={fieldEdit('messaging_limit_tier')}>
                     <option value="">— Não definido —</option>
-                    <option value="TIER_1">Tier 1 (1k/dia)</option>
-                    <option value="TIER_2">Tier 2 (10k/dia)</option>
-                    <option value="TIER_3">Tier 3 (100k/dia)</option>
-                    <option value="TIER_4">Tier 4 (ilimitado)</option>
+                    <option value="TIER_1">Tier 1 (250/dia)</option>
+                    <option value="TIER_2">Tier 2 (2k/dia)</option>
+                    <option value="TIER_3">Tier 3 (10k/dia)</option>
+                    <option value="TIER_4">Tier 4 (100k/dia)</option>
                   </select>
                 </div>
               </div>
@@ -689,7 +769,8 @@ function DetailDrawer({ number: initialNumber, onClose, onNumberUpdated }) {
                 <thead>
                   <tr>
                     <th>Automação</th>
-                    <th>Template</th>
+                    <th>Ferramenta</th>
+                    <th>Templates</th>
                     <th>Vol./dia</th>
                     <th>Ações</th>
                   </tr>
@@ -699,7 +780,14 @@ function DetailDrawer({ number: initialNumber, onClose, onNumberUpdated }) {
                     <>
                       <tr key={a.id} className="auto-row">
                         <td className="auto-td">{a.automation_name}</td>
-                        <td className="auto-td auto-mono">{a.template_name || <span className="inv-dash">—</span>}</td>
+                        <td className="auto-td">{a.tool_name || <span className="inv-dash">—</span>}</td>
+                        <td className="auto-td">
+                          <TemplatesInline
+                            automation={a}
+                            numberId={number.id}
+                            onChange={updated => setAutos(prev => prev.map(x => x.id === updated.id ? updated : x))}
+                          />
+                        </td>
                         <td className="auto-td">{a.daily_volume > 0 ? a.daily_volume.toLocaleString() : <span className="inv-dash">—</span>}</td>
                         <td className="auto-td">
                           <div className="inv-actions">
@@ -710,7 +798,7 @@ function DetailDrawer({ number: initialNumber, onClose, onNumberUpdated }) {
                       </tr>
                       {editingAuto === a.id && (
                         <tr key={`edit-${a.id}`}>
-                          <td colSpan={4} className="auto-td-form">
+                          <td colSpan={5} className="auto-td-form">
                             <AutoForm
                               initial={a}
                               onSave={(form) => handleUpdateAuto(a.id, form)}
@@ -1344,6 +1432,60 @@ const CSS_STR = `
   }
   .auto-input:focus { border-color: #22c55e; }
   .auto-form-btns { display: flex; gap: 6px; }
+  .auto-input--sm { padding: 4px 8px; font-size: 11px; }
+
+  /* ── Templates inline ── */
+  .auto-templates { display: flex; flex-direction: column; gap: 4px; }
+  .auto-templates-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+  }
+  .auto-template-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #1a1f28;
+    border: 1px solid #252c38;
+    border-radius: 4px;
+    font-size: 11px;
+    color: #c4cdd8;
+    padding: 2px 6px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .auto-template-del {
+    background: none;
+    border: none;
+    color: #4a5568;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    padding: 0 1px;
+    transition: color 0.12s;
+  }
+  .auto-template-del:hover { color: #ef4444; }
+  .auto-template-add-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: none;
+    border: 1px dashed #252c38;
+    border-radius: 4px;
+    color: #4a5568;
+    font-size: 11px;
+    font-family: inherit;
+    padding: 2px 7px;
+    cursor: pointer;
+    transition: color 0.12s, border-color 0.12s;
+  }
+  .auto-template-add-btn:hover { color: #22c55e; border-color: #22c55e50; }
+  .auto-template-add-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .auto-template-add-row .auto-input--sm { width: 150px; flex-shrink: 0; }
 
   /* ── Health logs timeline ── */
   .inv-timeline { display: flex; flex-direction: column; gap: 0; margin-top: 6px; }
