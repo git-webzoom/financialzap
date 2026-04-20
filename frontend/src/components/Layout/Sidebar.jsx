@@ -7,7 +7,7 @@ const NAV = [
   { to: '/templates',          label: 'Templates',     icon: IconDoc     },
   { to: '/disparos/novo',      label: 'Novo Disparo',  icon: IconSend    },
   { to: '/disparos/historico', label: 'Histórico',     icon: IconClock   },
-  { to: '/kanban',             label: 'Kanban BMs',    icon: IconKanban  },
+  { to: '/kanban',             label: 'Contingência BMs', icon: IconKanban  },
   { to: '/inventario',         label: 'Números',       icon: IconNumbers   },
   { to: '/fornecedores',       label: 'Fornecedores',  icon: IconSupplier },
   { to: '/fluxo-mensagens',    label: 'Fluxos de MSGs', icon: IconRegua    },
