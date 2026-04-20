@@ -14,7 +14,7 @@ async function listarGrupos() {
             COUNT(d.id)                                         AS total_disparos,
             SUM(CASE WHEN d.status = 'ativo' THEN 1 ELSE 0 END) AS disparos_ativos
           FROM grupos g
-          LEFT JOIN regua_disparos d ON d.grupo_id = g.id
+          LEFT JOIN fluxo_mensagens d ON d.grupo_id = g.id
           GROUP BY g.id
           ORDER BY g.nome ASC`,
     args: [],
@@ -40,7 +40,7 @@ async function criarGrupo({ nome, descricao }) {
 async function excluirGrupo(grupoId) {
   const db = getDb()
   const { rows: check } = await db.execute({
-    sql: 'SELECT COUNT(*) AS cnt FROM regua_disparos WHERE grupo_id = ?',
+    sql: 'SELECT COUNT(*) AS cnt FROM fluxo_mensagens WHERE grupo_id = ?',
     args: [grupoId],
   })
   if (Number(check[0].cnt) > 0) {
@@ -56,7 +56,7 @@ async function excluirGrupo(grupoId) {
 async function listarDisparosPorGrupo(grupoId) {
   const db = getDb()
   const { rows } = await db.execute({
-    sql: 'SELECT * FROM regua_disparos WHERE grupo_id = ? ORDER BY criado_em ASC',
+    sql: 'SELECT * FROM fluxo_mensagens WHERE grupo_id = ? ORDER BY criado_em ASC',
     args: [Number(grupoId)],
   })
 
@@ -107,7 +107,7 @@ async function criarDisparo(grupoId, { nome, tipo = 'recorrente', dia_semana, da
   const now = new Date().toISOString()
 
   const { lastInsertRowid } = await db.execute({
-    sql: `INSERT INTO regua_disparos
+    sql: `INSERT INTO fluxo_mensagens
             (grupo_id, nome, tipo, dia_semana, data_fixa, horario, ferramenta, tipo_copy, status, responsavel, observacao, criado_em, atualizado_em)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
@@ -125,13 +125,13 @@ async function criarDisparo(grupoId, { nome, tipo = 'recorrente', dia_semana, da
       now, now,
     ],
   })
-  const { rows } = await db.execute({ sql: 'SELECT * FROM regua_disparos WHERE id = ?', args: [lastInsertRowid] })
+  const { rows } = await db.execute({ sql: 'SELECT * FROM fluxo_mensagens WHERE id = ?', args: [lastInsertRowid] })
   return rows[0]
 }
 
 async function editarDisparo(id, body) {
   const db = getDb()
-  const { rows } = await db.execute({ sql: 'SELECT * FROM regua_disparos WHERE id = ?', args: [id] })
+  const { rows } = await db.execute({ sql: 'SELECT * FROM fluxo_mensagens WHERE id = ?', args: [id] })
   if (!rows.length) { const e = new Error('Disparo não encontrado'); e.status = 404; throw e }
   const cur = rows[0]
 
@@ -150,7 +150,7 @@ async function editarDisparo(id, body) {
 
   const now = new Date().toISOString()
   await db.execute({
-    sql: `UPDATE regua_disparos
+    sql: `UPDATE fluxo_mensagens
           SET nome=?, tipo=?, dia_semana=?, data_fixa=?, horario=?, ferramenta=?, tipo_copy=?, status=?, responsavel=?, observacao=?, atualizado_em=?
           WHERE id=?`,
     args: [
@@ -168,13 +168,13 @@ async function editarDisparo(id, body) {
       id,
     ],
   })
-  const { rows: updated } = await db.execute({ sql: 'SELECT * FROM regua_disparos WHERE id = ?', args: [id] })
+  const { rows: updated } = await db.execute({ sql: 'SELECT * FROM fluxo_mensagens WHERE id = ?', args: [id] })
   return updated[0]
 }
 
 async function excluirDisparo(id) {
   const db = getDb()
-  await db.execute({ sql: 'DELETE FROM regua_disparos WHERE id = ?', args: [id] })
+  await db.execute({ sql: 'DELETE FROM fluxo_mensagens WHERE id = ?', args: [id] })
 }
 
 // ─── Resumo ───────────────────────────────────────────────────────────────────
@@ -187,7 +187,7 @@ async function obterResumo() {
             COUNT(*) AS total_disparos,
             SUM(CASE WHEN status = 'ativo'   THEN 1 ELSE 0 END) AS disparos_ativos,
             SUM(CASE WHEN status = 'pausado' THEN 1 ELSE 0 END) AS disparos_pausados
-          FROM regua_disparos`,
+          FROM fluxo_mensagens`,
     args: [],
   })
   return {

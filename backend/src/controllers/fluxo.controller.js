@@ -1,4 +1,4 @@
-const svc = require('../services/regua.service')
+const svc = require('../services/fluxo.service')
 
 async function listarGrupos(req, res) {
   try {

@@ -1,6 +1,6 @@
 const router = require('express').Router()
 const { authMiddleware } = require('../middlewares/auth.middleware')
-const ctrl = require('../controllers/regua.controller')
+const ctrl = require('../controllers/fluxo.controller')
 
 router.use(authMiddleware)
 

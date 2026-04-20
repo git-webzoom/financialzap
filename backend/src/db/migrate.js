@@ -121,16 +121,19 @@ async function migrate() {
   `)
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_bm_card_phones_waba_id ON bm_card_phones(card_waba_id)`)
 
-  // regua_disparos — campos ferramenta e tipo_copy (idempotente)
-  await addColumnIfMissing(db, 'regua_disparos', 'ferramenta', 'TEXT')
-  await addColumnIfMissing(db, 'regua_disparos', 'tipo_copy',  'TEXT')
+  // fluxo_mensagens — renomear de regua_disparos se ainda não foi renomeado
+  {
+    const { rows: tables } = await db.execute(`SELECT name FROM sqlite_master WHERE type='table'`)
+    const names = tables.map(t => t.name)
+    if (names.includes('regua_disparos') && !names.includes('fluxo_mensagens')) {
+      await db.execute(`ALTER TABLE regua_disparos RENAME TO fluxo_mensagens`)
+      console.log('[db] Renamed regua_disparos → fluxo_mensagens')
+    }
+  }
 
-  // regua_disparos — nova estrutura (disparos por grupo, recorrentes ou avulsos)
-  // Drop a tabela antiga (formato texto livre + data_disparo) e recria com nova estrutura.
-  // Dados antigos são descartados intencionalmente — a lógica de negócio mudou.
-  await db.execute(`DROP TABLE IF EXISTS regua_disparos`)
+  // fluxo_mensagens — garantir que a tabela existe (ambientes limpos)
   await db.execute(`
-    CREATE TABLE IF NOT EXISTS regua_disparos (
+    CREATE TABLE IF NOT EXISTS fluxo_mensagens (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
       grupo_id      INTEGER NOT NULL,
       nome          TEXT    NOT NULL,
@@ -146,7 +149,11 @@ async function migrate() {
       FOREIGN KEY (grupo_id) REFERENCES grupos(id)
     )
   `)
-  await db.execute(`CREATE INDEX IF NOT EXISTS idx_regua_disparos_grupo_id ON regua_disparos(grupo_id)`)
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_fluxo_mensagens_grupo_id ON fluxo_mensagens(grupo_id)`)
+
+  // fluxo_mensagens — campos ferramenta e tipo_copy (idempotente)
+  await addColumnIfMissing(db, 'fluxo_mensagens', 'ferramenta', 'TEXT')
+  await addColumnIfMissing(db, 'fluxo_mensagens', 'tipo_copy',  'TEXT')
 
   console.log('[db] Migration complete.')
 }

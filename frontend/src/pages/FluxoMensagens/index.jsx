@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useRegua } from '../../hooks/useRegua'
+import { useFluxo } from '../../hooks/useFluxo'
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -393,13 +393,13 @@ function DisparosTable({ disparos, onEditar, onExcluir }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function ReguaDisparos() {
+export default function FluxoMensagens() {
   const {
     grupos, grupoSelecionado, disparos, resumo, loading, error,
     fetchGrupos, criarGrupo, excluirGrupo, selecionarGrupo,
     criarDisparo, editarDisparo, excluirDisparo,
     fetchResumo, setGrupoSelecionado,
-  } = useRegua()
+  } = useFluxo()
 
   const [showGrupoModal, setShowGrupoModal] = useState(false)
   const [showForm,       setShowForm]       = useState(false)
@@ -451,7 +451,7 @@ export default function ReguaDisparos() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  // ── Estado 2: Régua do grupo selecionado ──
+  // ── Estado 2: Fluxo do grupo selecionado ──
   if (grupoSelecionado) {
     return (
       <>
@@ -534,7 +534,7 @@ export default function ReguaDisparos() {
         {/* Topbar */}
         <div className="rg-topbar">
           <div>
-            <h1 className="rg-page-title">Régua de Disparos</h1>
+            <h1 className="rg-page-title">Fluxo de Mensagens</h1>
             <p className="rg-page-sub">Gerencie os disparos recorrentes e avulsos por grupo</p>
           </div>
           <button className="rg-btn rg-btn--primary" onClick={() => setShowGrupoModal(true)}>
@@ -552,7 +552,7 @@ export default function ReguaDisparos() {
           <div className="rg-empty-state">
             <div className="rg-empty-state-icon">📋</div>
             <div className="rg-empty-state-title">Nenhum grupo criado</div>
-            <div className="rg-empty-state-sub">Crie um grupo para começar a configurar sua régua de disparos.</div>
+            <div className="rg-empty-state-sub">Crie um grupo para começar a configurar seu fluxo de mensagens.</div>
             <button className="rg-btn rg-btn--primary" onClick={() => setShowGrupoModal(true)}>
               <IconPlus /> Criar primeiro grupo
             </button>

@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
-import * as svc from '../services/reguaService'
+import * as svc from '../services/fluxoService'
 
-export function useRegua() {
+export function useFluxo() {
   const [grupos,          setGrupos]          = useState([])
   const [grupoSelecionado, setGrupoSelecionado] = useState(null)
   const [disparos,        setDisparos]        = useState([])

@@ -312,9 +312,9 @@ CREATE TABLE IF NOT EXISTS grupos (
   criado_em  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- ─── regua_disparos ───────────────────────────────────────────────────────────
+-- ─── fluxo_mensagens ──────────────────────────────────────────────────────────
 -- Disparos configurados por grupo: recorrentes (todo dia X da semana) ou avulsos (data fixa).
-CREATE TABLE IF NOT EXISTS regua_disparos (
+CREATE TABLE IF NOT EXISTS fluxo_mensagens (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   grupo_id      INTEGER NOT NULL,
   nome          TEXT    NOT NULL,
@@ -332,4 +332,4 @@ CREATE TABLE IF NOT EXISTS regua_disparos (
   FOREIGN KEY (grupo_id) REFERENCES grupos(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_regua_disparos_grupo_id ON regua_disparos(grupo_id);
+CREATE INDEX IF NOT EXISTS idx_fluxo_mensagens_grupo_id ON fluxo_mensagens(grupo_id);
