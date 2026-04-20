@@ -11,8 +11,10 @@ async function listarGrupos() {
   const db = getDb()
   const { rows } = await db.execute({
     sql: `SELECT g.*,
-            COUNT(d.id)                                         AS total_disparos,
-            SUM(CASE WHEN d.status = 'ativo' THEN 1 ELSE 0 END) AS disparos_ativos
+            COUNT(d.id)                                                   AS total_disparos,
+            SUM(CASE WHEN d.status = 'ativo' THEN 1 ELSE 0 END)           AS disparos_ativos,
+            COUNT(DISTINCT CASE WHEN d.status = 'ativo' AND d.tipo = 'recorrente'
+                                THEN d.dia_semana END)                     AS dias_ativos
           FROM grupos g
           LEFT JOIN fluxo_mensagens d ON d.grupo_id = g.id
           GROUP BY g.id

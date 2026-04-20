@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useFluxo } from '../../hooks/useFluxo'
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -159,8 +159,9 @@ function GrupoModal({ onCriar, onClose }) {
 
 function GrupoCard({ grupo, onSelecionar, onExcluir }) {
   const [excluindo, setExcluindo] = useState(false)
-  const ativos  = Number(grupo.disparos_ativos)  || 0
-  const total   = Number(grupo.total_disparos)   || 0
+  const ativos    = Number(grupo.disparos_ativos) || 0
+  const total     = Number(grupo.total_disparos)  || 0
+  const diasAtivos = Number(grupo.dias_ativos)    || 0
   const bloqueado = total > 0
 
   async function handleExcluir(e) {
@@ -189,6 +190,11 @@ function GrupoCard({ grupo, onSelecionar, onExcluir }) {
           <span className="rg-grupo-stat">
             {total} disparo{total !== 1 ? 's' : ''} no total
           </span>
+          {diasAtivos > 0 && (
+            <span className="rg-grupo-stat rg-grupo-stat--blue">
+              {diasAtivos} dia{diasAtivos !== 1 ? 's' : ''}/semana
+            </span>
+          )}
         </div>
       </div>
       <div className="rg-grupo-card-footer">
@@ -425,6 +431,8 @@ export default function FluxoMensagens() {
   const [showForm,       setShowForm]       = useState(false)
   const [editando,       setEditando]       = useState(null)
   const [saving,         setSaving]         = useState(false)
+  const [filtroDia,      setFiltroDia]      = useState('')
+  const [filtroTexto,    setFiltroTexto]    = useState('')
 
   useEffect(() => {
     fetchGrupos()
@@ -459,10 +467,32 @@ export default function FluxoMensagens() {
     }
   }
 
+  const disparosFiltrados = useMemo(() => {
+    let list = disparos
+    if (filtroDia) {
+      list = list.filter(d =>
+        d.tipo === 'recorrente'
+          ? d.dia_semana === filtroDia
+          : d.data_fixa === filtroDia
+      )
+    }
+    if (filtroTexto.trim()) {
+      const q = filtroTexto.toLowerCase()
+      list = list.filter(d =>
+        (d.nome          || '').toLowerCase().includes(q) ||
+        (d.ferramenta    || '').toLowerCase().includes(q) ||
+        (d.campanha_grupo|| '').toLowerCase().includes(q)
+      )
+    }
+    return list
+  }, [disparos, filtroDia, filtroTexto])
+
   function handleVoltar() {
     setGrupoSelecionado(null)
     setShowForm(false)
     setEditando(null)
+    setFiltroDia('')
+    setFiltroTexto('')
   }
 
   function handleEditar(disparo) {
@@ -530,12 +560,44 @@ export default function FluxoMensagens() {
 
           {error && <div className="rg-error">⚠ {error}</div>}
 
+          {/* Filtros */}
+          <div className="rg-filters">
+            <select
+              className="rg-filter-select"
+              value={filtroDia}
+              onChange={e => setFiltroDia(e.target.value)}
+            >
+              <option value="">Todos os dias</option>
+              {DIAS_OPTIONS.map(([val, lbl]) => (
+                <option key={val} value={val}>{lbl}</option>
+              ))}
+            </select>
+            <input
+              className="rg-filter-search"
+              value={filtroTexto}
+              onChange={e => setFiltroTexto(e.target.value)}
+              placeholder="Buscar por título, ferramenta, campanha…"
+            />
+            {(filtroDia || filtroTexto) && (
+              <button
+                className="rg-filter-clear-btn"
+                onClick={() => { setFiltroDia(''); setFiltroTexto('') }}
+                title="Limpar filtros"
+              >
+                <IconX />
+              </button>
+            )}
+            <span className="rg-filter-count">
+              {disparosFiltrados.length} de {disparos.length}
+            </span>
+          </div>
+
           {/* Tabela de disparos */}
           {loading ? (
             <div className="rg-loading">Carregando…</div>
           ) : (
             <DisparosTable
-              disparos={disparos}
+              disparos={disparosFiltrados}
               onEditar={handleEditar}
               onExcluir={handleExcluirDisparo}
             />
@@ -699,6 +761,7 @@ const CSS_STR = `
     gap: 5px;
   }
   .rg-grupo-stat--green { color: #22c55e; }
+  .rg-grupo-stat--blue  { color: #3b82f6; }
 
   .rg-grupo-card-footer {
     padding: 10px 16px 14px;
@@ -721,6 +784,38 @@ const CSS_STR = `
   .rg-empty-state-icon  { font-size: 36px; }
   .rg-empty-state-title { font-size: 16px; font-weight: 600; color: #e8edf5; }
   .rg-empty-state-sub   { font-size: 13px; color: #8a94a6; max-width: 320px; line-height: 1.5; }
+
+  /* ── Filtros inline (estado 2) ── */
+  .rg-filters {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .rg-filter-select,
+  .rg-filter-search {
+    background: #141820;
+    border: 1px solid #252c38;
+    border-radius: 8px;
+    color: #e8edf5;
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .rg-filter-select:focus,
+  .rg-filter-search:focus { border-color: #22c55e; }
+  .rg-filter-select  { cursor: pointer; }
+  .rg-filter-search  { flex: 1; min-width: 200px; }
+  .rg-filter-clear-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 6px; border: none;
+    background: none; color: #4a5568; cursor: pointer;
+    transition: color 0.15s, background 0.15s; padding: 0; flex-shrink: 0;
+  }
+  .rg-filter-clear-btn:hover { color: #e8edf5; background: #1a1f28; }
+  .rg-filter-count { font-size: 12px; color: #4a5568; white-space: nowrap; }
 
   /* ── Inline form panel ── */
   .rg-inline-form {
