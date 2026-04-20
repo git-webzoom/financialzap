@@ -11,6 +11,7 @@ import Configuracoes from './pages/Configuracoes'
 import Kanban from './pages/Kanban'
 import Inventario from './pages/Inventario'
 import Fornecedores from './pages/Fornecedores'
+import ReguaDisparos from './pages/ReguaDisparos'
 
 // Layout
 import Layout from './components/Layout/Layout'
@@ -47,6 +48,7 @@ export default function App() {
           <Route path="kanban"              element={<Kanban />} />
           <Route path="inventario"          element={<Inventario />} />
           <Route path="fornecedores"        element={<Fornecedores />} />
+          <Route path="regua-disparos"      element={<ReguaDisparos />} />
           <Route path="configuracoes"       element={<Configuracoes />} />
         </Route>
 

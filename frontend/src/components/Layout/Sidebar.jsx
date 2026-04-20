@@ -10,6 +10,7 @@ const NAV = [
   { to: '/kanban',             label: 'Kanban BMs',    icon: IconKanban  },
   { to: '/inventario',         label: 'Números',       icon: IconNumbers   },
   { to: '/fornecedores',       label: 'Fornecedores',  icon: IconSupplier },
+  { to: '/regua-disparos',     label: 'Régua',         icon: IconRegua    },
   { to: '/configuracoes',      label: 'Configurações', icon: IconGear     },
 ]
 
@@ -176,6 +177,16 @@ function IconSupplier() {
       <circle cx="10" cy="6" r="3.5" stroke="currentColor" strokeWidth="1.6"/>
       <path d="M3 17c0-3.314 3.134-6 7-6s7 2.686 7 6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
       <path d="M14 10l1.5 1.5M14 13h3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
+function IconRegua() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path d="M3 5h14M3 10h10M3 15h6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+      <circle cx="16" cy="13" r="2.5" stroke="currentColor" strokeWidth="1.5"/>
+      <path d="M16 10.5V10M16 15.5V16M13.5 13H13M18.5 13H19M14.27 11.27l-.36-.36M18.09 15.09l-.36-.36M14.27 14.73l-.36.36M18.09 10.91l-.36.36" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
     </svg>
   )
 }

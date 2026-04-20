@@ -302,3 +302,30 @@ CREATE TABLE IF NOT EXISTS supplier_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_supplier_logs_supplier_id ON supplier_logs(supplier_id);
+
+-- ─── grupos ───────────────────────────────────────────────────────────────────
+-- Grupos monitorados pela régua de disparos (compartilhado entre todos os usuários).
+CREATE TABLE IF NOT EXISTS grupos (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  nome       TEXT    NOT NULL,
+  descricao  TEXT,
+  criado_em  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ─── regua_disparos ───────────────────────────────────────────────────────────
+-- Registros da régua de disparos por grupo e data.
+CREATE TABLE IF NOT EXISTS regua_disparos (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  grupo_id      INTEGER NOT NULL,
+  data_disparo  DATE    NOT NULL,
+  regua         TEXT    NOT NULL,
+  status        TEXT    NOT NULL DEFAULT 'ativo' CHECK (status IN ('ativo', 'pausado', 'agendado')),
+  responsavel   TEXT,
+  observacao    TEXT,
+  criado_em     DATETIME DEFAULT CURRENT_TIMESTAMP,
+  atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (grupo_id) REFERENCES grupos(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_regua_disparos_grupo_id     ON regua_disparos(grupo_id);
+CREATE INDEX IF NOT EXISTS idx_regua_disparos_data_disparo ON regua_disparos(data_disparo);
