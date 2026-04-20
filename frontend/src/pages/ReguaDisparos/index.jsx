@@ -210,7 +210,23 @@ function GrupoCard({ grupo, onSelecionar, onExcluir }) {
 
 // ─── DisparoForm ──────────────────────────────────────────────────────────────
 
-const EMPTY_DISPARO = { nome: '', tipo: 'recorrente', dia_semana: 'domingo', data_fixa: '', horario: '', status: 'ativo', responsavel: '', observacao: '' }
+const TIPO_COPY_CFG = {
+  texto:  { label: 'Só texto',    color: '#8a94a6', bg: '#8a94a615', border: '#8a94a630' },
+  video:  { label: 'Com vídeo',   color: '#3b82f6', bg: '#3b82f618', border: '#3b82f640' },
+  imagem: { label: 'Com imagem',  color: '#a855f7', bg: '#a855f718', border: '#a855f740' },
+}
+
+function CopyBadge({ tipo_copy }) {
+  if (!tipo_copy) return <span className="rg-dash">—</span>
+  const cfg = TIPO_COPY_CFG[tipo_copy] ?? { label: tipo_copy, color: '#8a94a6', bg: '#8a94a615', border: '#8a94a630' }
+  return (
+    <span className="rg-badge" style={{ color: cfg.color, background: cfg.bg, borderColor: cfg.border }}>
+      {cfg.label}
+    </span>
+  )
+}
+
+const EMPTY_DISPARO = { nome: '', tipo: 'recorrente', dia_semana: 'domingo', data_fixa: '', horario: '', ferramenta: '', tipo_copy: '', status: 'ativo', responsavel: '', observacao: '' }
 
 function DisparoForm({ initial, onSave, onCancel, saving }) {
   const [form, setForm] = useState(initial ? {
@@ -219,6 +235,8 @@ function DisparoForm({ initial, onSave, onCancel, saving }) {
     dia_semana:  initial.dia_semana  ?? 'domingo',
     data_fixa:   initial.data_fixa   ?? '',
     horario:     initial.horario     ?? '',
+    ferramenta:  initial.ferramenta  ?? '',
+    tipo_copy:   initial.tipo_copy   ?? '',
     status:      initial.status      ?? 'ativo',
     responsavel: initial.responsavel ?? '',
     observacao:  initial.observacao  ?? '',
@@ -266,6 +284,19 @@ function DisparoForm({ initial, onSave, onCancel, saving }) {
           </div>
         )}
         <div className="rg-form-row">
+          <label>Ferramenta</label>
+          <input value={form.ferramenta} onChange={field('ferramenta')} placeholder="Ex: ManyChat, Typebot…" />
+        </div>
+        <div className="rg-form-row">
+          <label>Tipo de copy</label>
+          <select value={form.tipo_copy} onChange={field('tipo_copy')}>
+            <option value="">— Selecione —</option>
+            <option value="texto">Só texto</option>
+            <option value="video">Com vídeo</option>
+            <option value="imagem">Com imagem</option>
+          </select>
+        </div>
+        <div className="rg-form-row">
           <label>Status</label>
           <select value={form.status} onChange={field('status')}>
             <option value="ativo">Ativo</option>
@@ -273,6 +304,9 @@ function DisparoForm({ initial, onSave, onCancel, saving }) {
             <option value="agendado">Agendado</option>
           </select>
         </div>
+      </div>
+
+      <div className="rg-form-grid rg-form-grid--2">
         <div className="rg-form-row">
           <label>Responsável</label>
           <input value={form.responsavel} onChange={field('responsavel')} placeholder="Nome do responsável" />
@@ -320,6 +354,8 @@ function DisparosTable({ disparos, onEditar, onExcluir }) {
             <th>Tipo</th>
             <th>Quando</th>
             <th>Horário</th>
+            <th>Ferramenta</th>
+            <th>Copy</th>
             <th>Status</th>
             <th>Responsável</th>
             <th>Ações</th>
@@ -337,6 +373,8 @@ function DisparosTable({ disparos, onEditar, onExcluir }) {
                 }
               </td>
               <td className="rg-td rg-td--horario">{d.horario}</td>
+              <td className="rg-td">{d.ferramenta || <span className="rg-dash">—</span>}</td>
+              <td className="rg-td"><CopyBadge tipo_copy={d.tipo_copy} /></td>
               <td className="rg-td"><StatusBadge status={d.status} /></td>
               <td className="rg-td">{d.responsavel || <span className="rg-dash">—</span>}</td>
               <td className="rg-td">
@@ -686,13 +724,16 @@ const CSS_STR = `
     display: grid;
     gap: 12px;
   }
+  .rg-form-grid--2 { grid-template-columns: repeat(2, 1fr); }
   .rg-form-grid--3 { grid-template-columns: repeat(3, 1fr); }
   .rg-form-grid--4 { grid-template-columns: repeat(4, 1fr); }
   @media (max-width: 900px) {
+    .rg-form-grid--2 { grid-template-columns: repeat(2, 1fr); }
     .rg-form-grid--3 { grid-template-columns: repeat(2, 1fr); }
     .rg-form-grid--4 { grid-template-columns: repeat(2, 1fr); }
   }
   @media (max-width: 500px) {
+    .rg-form-grid--2,
     .rg-form-grid--3,
     .rg-form-grid--4 { grid-template-columns: 1fr; }
   }

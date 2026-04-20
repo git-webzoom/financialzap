@@ -121,6 +121,10 @@ async function migrate() {
   `)
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_bm_card_phones_waba_id ON bm_card_phones(card_waba_id)`)
 
+  // regua_disparos — campos ferramenta e tipo_copy (idempotente)
+  await addColumnIfMissing(db, 'regua_disparos', 'ferramenta', 'TEXT')
+  await addColumnIfMissing(db, 'regua_disparos', 'tipo_copy',  'TEXT')
+
   // regua_disparos — nova estrutura (disparos por grupo, recorrentes ou avulsos)
   // Drop a tabela antiga (formato texto livre + data_disparo) e recria com nova estrutura.
   // Dados antigos são descartados intencionalmente — a lógica de negócio mudou.

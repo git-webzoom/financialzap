@@ -322,6 +322,8 @@ CREATE TABLE IF NOT EXISTS regua_disparos (
   dia_semana    TEXT    CHECK (dia_semana IN ('domingo','segunda','terca','quarta','quinta','sexta','sabado')),
   data_fixa     DATE,
   horario       TEXT    NOT NULL,
+  ferramenta    TEXT,
+  tipo_copy     TEXT    CHECK (tipo_copy IN ('texto', 'video', 'imagem')),
   status        TEXT    NOT NULL DEFAULT 'ativo' CHECK (status IN ('ativo', 'pausado', 'agendado')),
   responsavel   TEXT,
   observacao    TEXT,
