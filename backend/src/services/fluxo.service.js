@@ -11,10 +11,15 @@ async function listarGrupos() {
   const db = getDb()
   const { rows } = await db.execute({
     sql: `SELECT g.*,
-            COUNT(d.id)                                                   AS total_disparos,
-            SUM(CASE WHEN d.status = 'ativo' THEN 1 ELSE 0 END)           AS disparos_ativos,
-            COUNT(DISTINCT CASE WHEN d.status = 'ativo' AND d.tipo = 'recorrente'
-                                THEN d.dia_semana END)                     AS dias_ativos
+            COUNT(d.id)                                         AS total_disparos,
+            SUM(CASE WHEN d.status = 'ativo' THEN 1 ELSE 0 END) AS disparos_ativos,
+            SUM(CASE WHEN d.status = 'ativo' AND d.dia_semana = 'domingo' THEN 1 ELSE 0 END) AS acoes_domingo,
+            SUM(CASE WHEN d.status = 'ativo' AND d.dia_semana = 'segunda' THEN 1 ELSE 0 END) AS acoes_segunda,
+            SUM(CASE WHEN d.status = 'ativo' AND d.dia_semana = 'terca'   THEN 1 ELSE 0 END) AS acoes_terca,
+            SUM(CASE WHEN d.status = 'ativo' AND d.dia_semana = 'quarta'  THEN 1 ELSE 0 END) AS acoes_quarta,
+            SUM(CASE WHEN d.status = 'ativo' AND d.dia_semana = 'quinta'  THEN 1 ELSE 0 END) AS acoes_quinta,
+            SUM(CASE WHEN d.status = 'ativo' AND d.dia_semana = 'sexta'   THEN 1 ELSE 0 END) AS acoes_sexta,
+            SUM(CASE WHEN d.status = 'ativo' AND d.dia_semana = 'sabado'  THEN 1 ELSE 0 END) AS acoes_sabado
           FROM grupos g
           LEFT JOIN fluxo_mensagens d ON d.grupo_id = g.id
           GROUP BY g.id

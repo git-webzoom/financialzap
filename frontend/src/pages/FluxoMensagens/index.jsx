@@ -157,11 +157,19 @@ function GrupoModal({ onCriar, onClose }) {
 
 // ─── GrupoCard ────────────────────────────────────────────────────────────────
 
+const DIAS_SEMANA_CARD = [
+  { key: 'domingo', label: 'Domingo' },
+  { key: 'segunda', label: 'Segunda' },
+  { key: 'terca',   label: 'Terça'   },
+  { key: 'quarta',  label: 'Quarta'  },
+  { key: 'quinta',  label: 'Quinta'  },
+  { key: 'sexta',   label: 'Sexta'   },
+  { key: 'sabado',  label: 'Sábado'  },
+]
+
 function GrupoCard({ grupo, onSelecionar, onExcluir }) {
   const [excluindo, setExcluindo] = useState(false)
-  const ativos    = Number(grupo.disparos_ativos) || 0
   const total     = Number(grupo.total_disparos)  || 0
-  const diasAtivos = Number(grupo.dias_ativos)    || 0
   const bloqueado = total > 0
 
   async function handleExcluir(e) {
@@ -177,25 +185,29 @@ function GrupoCard({ grupo, onSelecionar, onExcluir }) {
     }
   }
 
+  const diasComAcoes = DIAS_SEMANA_CARD.filter(d => Number(grupo[`acoes_${d.key}`]) > 0)
+
   return (
     <div className="rg-grupo-card">
       <div className="rg-grupo-card-body" onClick={() => onSelecionar(grupo)}>
         <div className="rg-grupo-card-nome">{grupo.nome}</div>
         {grupo.descricao && <div className="rg-grupo-card-desc">{grupo.descricao}</div>}
-        <div className="rg-grupo-card-stats">
-          <span className="rg-grupo-stat rg-grupo-stat--green">
-            <span className="rg-dot" style={{ background: '#22c55e' }} />
-            {ativos} ativo{ativos !== 1 ? 's' : ''}
-          </span>
-          <span className="rg-grupo-stat">
-            {total} disparo{total !== 1 ? 's' : ''} no total
-          </span>
-          {diasAtivos > 0 && (
-            <span className="rg-grupo-stat rg-grupo-stat--blue">
-              {diasAtivos} dia{diasAtivos !== 1 ? 's' : ''}/semana
-            </span>
-          )}
-        </div>
+
+        {diasComAcoes.length > 0 ? (
+          <div className="rg-grupo-dias">
+            {diasComAcoes.map(d => {
+              const n = Number(grupo[`acoes_${d.key}`])
+              return (
+                <div key={d.key} className="rg-grupo-dia-row">
+                  <span className="rg-grupo-dia-label">{d.label}</span>
+                  <span className="rg-grupo-dia-count">{n} ação{n !== 1 ? 'ões' : ''}</span>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="rg-grupo-dia-empty">Nenhum disparo ativo</div>
+        )}
       </div>
       <div className="rg-grupo-card-footer">
         <button className="rg-btn rg-btn--primary rg-btn--sm" onClick={() => onSelecionar(grupo)}>
@@ -748,20 +760,32 @@ const CSS_STR = `
     margin-bottom: 10px;
     line-height: 1.4;
   }
-  .rg-grupo-card-stats {
+  .rg-grupo-dias {
     display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 8px;
   }
-  .rg-grupo-stat {
-    font-size: 12px;
-    color: #4a5568;
+  .rg-grupo-dia-row {
     display: flex;
     align-items: center;
-    gap: 5px;
+    justify-content: space-between;
+    gap: 8px;
   }
-  .rg-grupo-stat--green { color: #22c55e; }
-  .rg-grupo-stat--blue  { color: #3b82f6; }
+  .rg-grupo-dia-label {
+    font-size: 12px;
+    color: #8a94a6;
+  }
+  .rg-grupo-dia-count {
+    font-size: 12px;
+    font-weight: 600;
+    color: #22c55e;
+  }
+  .rg-grupo-dia-empty {
+    font-size: 12px;
+    color: #4a5568;
+    margin-top: 8px;
+  }
 
   .rg-grupo-card-footer {
     padding: 10px 16px 14px;
