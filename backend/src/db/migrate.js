@@ -261,6 +261,8 @@ async function migrate() {
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_media_uploads_user_id    ON media_uploads(user_id)`)
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_media_uploads_waba_id    ON media_uploads(waba_id)`)
   await db.execute(`CREATE INDEX IF NOT EXISTS idx_media_uploads_media_type ON media_uploads(media_type)`)
+  // file_path: caminho relativo do arquivo salvo em disco (para servir URL pública)
+  await addColumnIfMissing(db, 'media_uploads', 'file_path', 'TEXT')
 
   console.log('[db] Migration complete.')
 }

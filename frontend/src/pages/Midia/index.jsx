@@ -36,7 +36,7 @@ export default function Midia() {
   const [uploading,        setUploading]       = useState(false)
   const [uploadError,      setUploadError]     = useState('')
   const [deleting,         setDeleting]        = useState(null)
-  const [copied,           setCopied]          = useState(null)
+  const [copied,           setCopied]          = useState(null)   // 'handle-{id}' | 'url-{id}'
   const fileInputRef = useRef(null)
 
   const loadMedias = useCallback(async () => {
@@ -120,9 +120,9 @@ export default function Midia() {
     }
   }
 
-  function handleCopy(handle) {
-    navigator.clipboard.writeText(handle).then(() => {
-      setCopied(handle)
+  function handleCopy(key, text) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(key)
       setTimeout(() => setCopied(null), 2000)
     })
   }
@@ -316,12 +316,21 @@ export default function Midia() {
                       {m.handle_id.length > 20 ? m.handle_id.slice(0, 20) + '…' : m.handle_id}
                     </code>
                     <button
-                      className={`mdia-copy-btn${copied === m.handle_id ? ' mdia-copy-btn--ok' : ''}`}
-                      onClick={() => handleCopy(m.handle_id)}
+                      className={`mdia-copy-btn${copied === `handle-${m.id}` ? ' mdia-copy-btn--ok' : ''}`}
+                      onClick={() => handleCopy(`handle-${m.id}`, m.handle_id)}
                       title="Copiar handle"
                     >
-                      {copied === m.handle_id ? <IconCheck /> : <IconCopy />}
+                      {copied === `handle-${m.id}` ? <IconCheck /> : <IconCopy />}
                     </button>
+                    {m.file_url && (
+                      <button
+                        className={`mdia-copy-btn mdia-copy-btn--url${copied === `url-${m.id}` ? ' mdia-copy-btn--ok' : ''}`}
+                        onClick={() => handleCopy(`url-${m.id}`, m.file_url)}
+                        title="Copiar link direto"
+                      >
+                        {copied === `url-${m.id}` ? <IconCheck /> : <IconLink />}
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="mdia-card-type-badge mdia-card-type-badge--{m.media_type.toLowerCase()}">
@@ -431,6 +440,15 @@ function IconGallery() {
       <rect x="4" y="8" width="32" height="24" rx="4" stroke="currentColor" strokeWidth="2"/>
       <circle cx="14" cy="18" r="3" stroke="currentColor" strokeWidth="1.8"/>
       <path d="M4 28l8-8 6 6 6-6 8 8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+}
+
+function IconLink() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M6.5 9.5a3.5 3.5 0 005 0l2-2a3.5 3.5 0 00-5-5L7 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+      <path d="M9.5 6.5a3.5 3.5 0 00-5 0l-2 2a3.5 3.5 0 005 5L9 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
     </svg>
   )
 }
@@ -810,6 +828,8 @@ const CSS = `
   }
   .mdia-copy-btn:hover { color: #e8edf5; background: #1a1f28; border-color: #374151; }
   .mdia-copy-btn--ok { color: #22c55e !important; border-color: #22c55e40 !important; background: #22c55e10 !important; }
+  .mdia-copy-btn--url { color: #3b82f6; border-color: #3b82f630; }
+  .mdia-copy-btn--url:hover { color: #93c5fd !important; background: #3b82f610 !important; border-color: #3b82f640 !important; }
 
   .mdia-card-type-badge {
     position: absolute;

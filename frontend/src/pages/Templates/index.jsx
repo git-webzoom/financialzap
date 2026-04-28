@@ -2,7 +2,8 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useTemplates } from '../../hooks/useTemplates'
 import { useWabas } from '../../hooks/useWabas'
 import TemplateForm from '../../components/Templates/TemplateForm'
-import * as wabaService from '../../services/wabaService'
+import * as wabaService  from '../../services/wabaService'
+import * as midiaService from '../../services/midiaService'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -793,6 +794,8 @@ function TestModal({ template: t, wabas, onClose, onSend }) {
   const [phoneNumId,   setPhoneNumId]   = useState('')
   const [variables,    setVariables]    = useState({})
   const [mediaUrl,     setMediaUrl]     = useState('')
+  const [mediaItems,   setMediaItems]   = useState([])
+  const [mediaLoading, setMediaLoading] = useState(false)
   const [phones,       setPhones]       = useState([])
   const [loadingPhones, setLoadingPhones] = useState(true)
   const [sending,      setSending]      = useState(false)
@@ -819,6 +822,18 @@ function TestModal({ template: t, wabas, onClose, onSend }) {
     load()
     return () => { cancelled = true }
   }, [t.waba_id])
+
+  // Load gallery items when template has media header
+  useEffect(() => {
+    if (!hasMedia) return
+    let cancelled = false
+    setMediaLoading(true)
+    midiaService.listMedia(headerComp.format)
+      .then(({ medias }) => { if (!cancelled) setMediaItems(medias || []) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setMediaLoading(false) })
+    return () => { cancelled = true }
+  }, [hasMedia, headerComp?.format])
 
   function handleVar(idx, value) {
     setVariables(prev => ({ ...prev, [String(idx)]: value }))
@@ -921,28 +936,48 @@ function TestModal({ template: t, wabas, onClose, onSend }) {
             </div>
           )}
 
-          {/* Media URL */}
+          {/* Media — gallery picker */}
           {hasMedia && (
             <div className="tf-field" style={{ marginBottom: 14 }}>
               <label className="tf-label">
-                URL da mídia
+                Mídia do cabeçalho
                 <span className="tf-hint">
-                  {headerComp.format === 'IMAGE'    && 'Imagem (JPG/PNG)'}
+                  {headerComp.format === 'IMAGE'    && 'Imagem (JPG/PNG/WEBP)'}
                   {headerComp.format === 'VIDEO'    && 'Vídeo (MP4)'}
                   {headerComp.format === 'DOCUMENT' && 'Documento (PDF)'}
                 </span>
               </label>
-              <input
-                className="tf-input"
-                value={mediaUrl}
-                onChange={e => setMediaUrl(e.target.value)}
-                placeholder={
-                  headerComp.format === 'IMAGE'    ? 'https://exemplo.com/imagem.jpg' :
-                  headerComp.format === 'VIDEO'    ? 'https://exemplo.com/video.mp4' :
-                                                     'https://exemplo.com/documento.pdf'
-                }
-                disabled={sending}
-              />
+              {mediaLoading ? (
+                <span className="tf-hint-inline">Carregando galeria…</span>
+              ) : mediaItems.length === 0 ? (
+                <div className="tm-media-empty">
+                  Nenhuma mídia do tipo <strong>{headerComp.format}</strong> encontrada.{' '}
+                  <a href="/midia" className="tm-media-link" target="_blank" rel="noreferrer">Abrir galeria</a> para enviar.
+                </div>
+              ) : (
+                <div className="tm-media-list">
+                  {mediaItems.map(m => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      className={`tm-media-item${mediaUrl === m.file_url ? ' tm-media-item--selected' : ''}`}
+                      onClick={() => setMediaUrl(mediaUrl === m.file_url ? '' : m.file_url)}
+                      disabled={sending}
+                      title={m.original_name}
+                    >
+                      <span className="tm-media-item-name">{m.original_name}</span>
+                      {m.file_url && (
+                        <span className="tm-media-item-url">{m.file_url.split('/').pop()}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {mediaUrl && (
+                <div className="tm-media-selected-url" title={mediaUrl}>
+                  <span>URL: </span><code>{mediaUrl.length > 60 ? mediaUrl.slice(0, 60) + '…' : mediaUrl}</code>
+                </div>
+              )}
             </div>
           )}
 
@@ -1738,6 +1773,77 @@ const CSS = `
   }
   .tm-test-result--ok  { background: #22c55e12; border: 1px solid #22c55e30; color: #86efac; }
   .tm-test-result--err { background: #ef444412; border: 1px solid #ef444430; color: #fca5a5; }
+
+  /* ── TestModal media picker ── */
+  .tm-media-empty {
+    padding: 10px 12px;
+    background: #1a1f28;
+    border: 1px solid #252c38;
+    border-radius: 7px;
+    font-size: 13px;
+    color: #4a5568;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .tm-media-link { color: #3b82f6; text-decoration: none; }
+  .tm-media-link:hover { text-decoration: underline; }
+  .tm-media-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    max-height: 180px;
+    overflow-y: auto;
+    padding-right: 2px;
+  }
+  .tm-media-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    width: 100%;
+    padding: 8px 12px;
+    background: #1a1f28;
+    border: 1px solid #252c38;
+    border-radius: 7px;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .tm-media-item:hover:not(:disabled) { border-color: #374151; background: #1e2530; }
+  .tm-media-item--selected { border-color: #22c55e60 !important; background: #22c55e08 !important; }
+  .tm-media-item:disabled { opacity: 0.5; cursor: not-allowed; }
+  .tm-media-item-name {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: #e8edf5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .tm-media-item-url {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #4a5568;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .tm-media-selected-url {
+    margin-top: 6px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    color: #4a5568;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .tm-media-selected-url code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #22c55e;
+  }
 
   /* ── Mobile responsiveness ── */
   @media (max-width: 640px) {

@@ -1,6 +1,8 @@
 const { getDb }   = require('../db/database')
 const metaService = require('./meta.service')
 const wabaService = require('./waba.service')
+const fs          = require('fs')
+const path        = require('path')
 
 const MIME_TO_TYPE = {
   'image/jpeg': 'IMAGE', 'image/png': 'IMAGE', 'image/webp': 'IMAGE',
@@ -16,11 +18,21 @@ const SIZE_LIMITS = {
   'application/pdf': 100 * 1024 * 1024,
 }
 
+function withFileUrl(record) {
+  if (!record) return record
+  const base = (process.env.BACKEND_URL || 'http://localhost:3001').replace(/\/$/, '')
+  return {
+    ...record,
+    file_url: record.file_path ? `${base}/media/${record.file_path}` : null,
+  }
+}
+
 async function uploadMedia(userId, phoneNumberId, file) {
   const db = getDb()
 
   const mediaType = MIME_TO_TYPE[file.mimetype]
   if (!mediaType) {
+    if (file.path) fs.unlink(file.path, () => {})
     const err = new Error('Tipo de arquivo não suportado.')
     err.status = 400
     throw err
@@ -28,6 +40,7 @@ async function uploadMedia(userId, phoneNumberId, file) {
 
   const limit = SIZE_LIMITS[file.mimetype]
   if (file.size > limit) {
+    if (file.path) fs.unlink(file.path, () => {})
     const mb = Math.round(limit / 1024 / 1024)
     const err = new Error(`Arquivo excede o limite de ${mb} MB para este tipo.`)
     err.status = 400
@@ -43,6 +56,7 @@ async function uploadMedia(userId, phoneNumberId, file) {
     args: [phoneNumberId, userId],
   })
   if (!pRows.length) {
+    if (file.path) fs.unlink(file.path, () => {})
     const err = new Error('Número não encontrado ou sem permissão.')
     err.status = 403
     throw err
@@ -51,33 +65,43 @@ async function uploadMedia(userId, phoneNumberId, file) {
   const { waba_id, access_token_enc } = pRows[0]
   const token = wabaService.getDecryptedToken({ access_token_enc })
 
+  // Read buffer from disk (diskStorage saves to file.path)
+  const fileBuffer = file.buffer || fs.readFileSync(file.path)
+
   console.log('[midia.service] uploading to Meta — phoneNumberId:', phoneNumberId, 'mime:', file.mimetype, 'size:', file.size)
 
   let metaResult
   try {
-    metaResult = await metaService.uploadMedia(phoneNumberId, token, file.buffer, file.mimetype, file.originalname)
+    metaResult = await metaService.uploadMedia(phoneNumberId, token, fileBuffer, file.mimetype, file.originalname)
   } catch (err) {
+    if (file.path) fs.unlink(file.path, () => {})
     const msg = err.response?.data?.error?.message || err.message
     console.error('[midia.service] uploadMedia Meta error:', JSON.stringify(err.response?.data || err.message))
     throw new Error(`Meta API error: ${msg}`)
   }
 
   const handleId = metaResult.id
-  if (!handleId) throw new Error('Meta não retornou um handle_id válido.')
+  if (!handleId) {
+    if (file.path) fs.unlink(file.path, () => {})
+    throw new Error('Meta não retornou um handle_id válido.')
+  }
+
+  // file_path: relative path from uploads/ dir, used to build public URL
+  const filePath = file.path ? path.basename(file.path) : null
 
   const now = new Date().toISOString()
   await db.execute({
     sql: `INSERT INTO media_uploads
-            (user_id, waba_id, phone_number_id, handle_id, original_name, mime_type, file_size, media_type, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [userId, waba_id, phoneNumberId, handleId, file.originalname, file.mimetype, file.size, mediaType, now],
+            (user_id, waba_id, phone_number_id, handle_id, original_name, mime_type, file_size, media_type, file_path, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [userId, waba_id, phoneNumberId, handleId, file.originalname, file.mimetype, file.size, mediaType, filePath, now],
   })
 
   const { rows: inserted } = await db.execute({
     sql: 'SELECT * FROM media_uploads WHERE handle_id = ?',
     args: [handleId],
   })
-  return inserted[0]
+  return withFileUrl(inserted[0])
 }
 
 async function listMedia(userId, mediaType = null) {
@@ -97,7 +121,7 @@ async function listMedia(userId, mediaType = null) {
        ORDER BY m.created_at DESC`
   const args = mediaType ? [userId, mediaType] : [userId]
   const { rows } = await db.execute({ sql, args })
-  return rows
+  return rows.map(withFileUrl)
 }
 
 async function deleteMedia(userId, mediaId) {
@@ -129,6 +153,12 @@ async function deleteMedia(userId, mediaId) {
   }
 
   await db.execute({ sql: 'DELETE FROM media_uploads WHERE id = ?', args: [mediaId] })
+
+  // Remove file from disk
+  if (record.file_path) {
+    const UPLOADS_DIR = require('path').join(__dirname, '..', '..', 'uploads')
+    fs.unlink(require('path').join(UPLOADS_DIR, record.file_path), () => {})
+  }
 }
 
 module.exports = { uploadMedia, listMedia, deleteMedia }

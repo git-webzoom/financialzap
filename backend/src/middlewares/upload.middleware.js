@@ -1,4 +1,7 @@
 const multer = require('multer')
+const path   = require('path')
+const fs     = require('fs')
+const { v4: uuidv4 } = require('uuid')
 
 // Store CSV in memory (no disk writes) — max 10 MB
 const storage = multer.memoryStorage()
@@ -58,8 +61,26 @@ function mediaFileFilter(_req, file, cb) {
   else cb(new Error('Formato não suportado. Aceitos: JPG, PNG, WEBP, MP4, PDF.'), false)
 }
 
+// Disk storage for media — saves to backend/uploads/ with UUID filename
+const UPLOADS_DIR = path.join(__dirname, '..', '..', 'uploads')
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true })
+
+const MIME_TO_EXT = {
+  'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp',
+  'video/mp4': '.mp4',
+  'application/pdf': '.pdf',
+}
+
+const mediaDiskStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+  filename: (_req, file, cb) => {
+    const ext = MIME_TO_EXT[file.mimetype] || path.extname(file.originalname).toLowerCase()
+    cb(null, `${uuidv4()}${ext}`)
+  },
+})
+
 const uploadMedia = multer({
-  storage,
+  storage: mediaDiskStorage,
   fileFilter: mediaFileFilter,
   limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB (validação fina por tipo no service)
 }).single('file')

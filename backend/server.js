@@ -1,7 +1,9 @@
 require('dotenv').config()
 const express = require('express')
-const cors = require('cors')
-const cron = require('node-cron')
+const cors    = require('cors')
+const cron    = require('node-cron')
+const path    = require('path')
+const fs      = require('fs')
 const { migrate } = require('./src/db/migrate')
 
 const app = express()
@@ -11,6 +13,11 @@ app.use(cors())
 // trust proxy headers (EasyPanel/nginx reverse proxy)
 app.set('trust proxy', 1)
 app.use(express.json({ limit: '10mb' }))
+
+// Serve uploaded media files as static assets at /media/<filename>
+const UPLOADS_DIR = path.join(__dirname, 'uploads')
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true })
+app.use('/media', express.static(UPLOADS_DIR))
 
 // Routes
 app.use('/api/auth',       require('./src/routes/auth.routes'))
