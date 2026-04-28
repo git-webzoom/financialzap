@@ -52,16 +52,17 @@ async function listTemplates(userId, wabaId = null) {
  * Create a template on Meta then save it locally.
  * payload follows the Meta message_templates format.
  */
-// Transforma componentes para o formato esperado pela Meta API.
-// VIDEO/DOCUMENT: converte header_url → header_handle.
-// IMAGE: passa header_url diretamente (Meta aceita).
+// Garante que componentes HEADER com mídia tenham o campo example no formato correto.
+// IMAGE/VIDEO/DOCUMENT: a Meta aceita example.header_url com URL pública.
 function _toMetaComponents(components = []) {
   return components.map(c => {
-    if (c.type === 'HEADER' && ['VIDEO', 'DOCUMENT'].includes(c.format)) {
+    if (c.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(c.format)) {
       if (c.example?.header_url?.length) {
-        return { ...c, example: { header_handle: c.example.header_url } }
+        return c // já está no formato correto
       }
-      return { ...c, example: { header_handle: [''] } }
+      // Sem URL — remove o example para não enviar campo inválido
+      const { example, ...rest } = c
+      return rest
     }
     return c
   })
