@@ -356,28 +356,46 @@ async function getWebhookSubscriptions(wabaId, accessToken) {
   return data
 }
 
-// ─── Media upload/delete ──────────────────────────────────────────────────────
+// ─── Media upload (Resumable Upload API) ─────────────────────────────────────
+//
+// Para header_handle em templates a Meta exige o fluxo de Resumable Upload:
+//   Passo 1 — POST /app/uploads — inicia sessão, retorna upload session id
+//   Passo 2 — POST /{upload_session_id} com o arquivo — retorna h:... handle
+// O handle h:... é o valor correto para example.header_handle nos templates.
+// Ref: https://developers.facebook.com/docs/whatsapp/cloud-api/reference/media
 
 /**
- * Upload a media file to Meta API via /{phone_number_id}/media.
- * Returns { id: "handle_id" } — handle used as header_handle in templates.
+ * Upload a media file for use as template header via Meta Resumable Upload API.
+ * Returns the h:... handle string to use in example.header_handle.
  */
 async function uploadMedia(phoneNumberId, accessToken, fileBuffer, mimeType, originalName) {
-  const FormData = require('form-data')
-  const form = new FormData()
-  form.append('messaging_product', 'whatsapp')
-  form.append('type', mimeType)
-  form.append('file', fileBuffer, { filename: originalName, contentType: mimeType })
+  // Passo 1: iniciar sessão de upload
+  const { data: session } = await metaApi.post('/app/uploads', null, {
+    params: {
+      access_token:  accessToken,
+      file_length:   fileBuffer.length,
+      file_type:     mimeType,
+      file_name:     originalName,
+    },
+  })
+  const uploadSessionId = session.id
+  if (!uploadSessionId) throw new Error('Meta não retornou upload session id.')
 
-  const { data } = await metaApi.post(`/${phoneNumberId}/media`, form, {
+  // Passo 2: enviar o arquivo binário
+  const { data: upload } = await metaApi.post(`/${uploadSessionId}`, fileBuffer, {
     headers: {
-      ...form.getHeaders(),
-      Authorization: `Bearer ${accessToken}`,
+      Authorization:  `OAuth ${accessToken}`,
+      'file_offset':  '0',
+      'Content-Type': mimeType,
     },
     maxBodyLength:    Infinity,
     maxContentLength: Infinity,
   })
-  return data  // { id: "handle_id" }
+
+  // Retorna o handle h:... usado em header_handle
+  const handle = upload.h
+  if (!handle) throw new Error('Meta não retornou handle de upload.')
+  return { id: handle }
 }
 
 /**
