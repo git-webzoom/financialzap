@@ -51,12 +51,14 @@ async function uploadMedia(userId, phoneNumberId, file) {
   const { waba_id, access_token_enc } = pRows[0]
   const token = wabaService.getDecryptedToken({ access_token_enc })
 
+  console.log('[midia.service] uploading to Meta — phoneNumberId:', phoneNumberId, 'mime:', file.mimetype, 'size:', file.size)
+
   let metaResult
   try {
     metaResult = await metaService.uploadMedia(phoneNumberId, token, file.buffer, file.mimetype, file.originalname)
   } catch (err) {
     const msg = err.response?.data?.error?.message || err.message
-    console.error('[midia.service] uploadMedia Meta error:', msg)
+    console.error('[midia.service] uploadMedia Meta error:', JSON.stringify(err.response?.data || err.message))
     throw new Error(`Meta API error: ${msg}`)
   }
 
