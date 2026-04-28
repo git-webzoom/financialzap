@@ -86,7 +86,9 @@ async function createTemplate(userId, wabaId, payload) {
 
   // Para a Meta: VIDEO/DOCUMENT precisam de header_handle; IMAGE aceita header_url.
   // Mantemos o payload original (com header_url) para salvar no banco e exibição no card.
+  console.log('[createTemplate] components recebidos:', JSON.stringify(payload.components))
   const metaPayload = { ...payload, components: _toMetaComponents(payload.components) }
+  console.log('[createTemplate] components enviados para Meta:', JSON.stringify(metaPayload.components))
 
   // Call Meta API
   let metaResult
