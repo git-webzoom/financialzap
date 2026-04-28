@@ -241,6 +241,27 @@ async function migrate() {
     }
   }
 
+  // media_uploads — mídias enviadas para a Meta API (handles para templates)
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS media_uploads (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id         INTEGER NOT NULL,
+      waba_id         TEXT    NOT NULL,
+      phone_number_id TEXT    NOT NULL,
+      handle_id       TEXT    NOT NULL UNIQUE,
+      original_name   TEXT    NOT NULL,
+      mime_type       TEXT    NOT NULL,
+      file_size       INTEGER NOT NULL,
+      media_type      TEXT    NOT NULL CHECK (media_type IN ('IMAGE','VIDEO','DOCUMENT')),
+      created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (waba_id) REFERENCES wabas(waba_id) ON DELETE CASCADE
+    )
+  `)
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_media_uploads_user_id    ON media_uploads(user_id)`)
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_media_uploads_waba_id    ON media_uploads(waba_id)`)
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_media_uploads_media_type ON media_uploads(media_type)`)
+
   console.log('[db] Migration complete.')
 }
 

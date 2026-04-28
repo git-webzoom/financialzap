@@ -356,6 +356,38 @@ async function getWebhookSubscriptions(wabaId, accessToken) {
   return data
 }
 
+// ─── Media upload/delete ──────────────────────────────────────────────────────
+
+/**
+ * Upload a media file to Meta API via /{phone_number_id}/media.
+ * Returns { id: "handle_id" } — handle used as header_handle in templates.
+ */
+async function uploadMedia(phoneNumberId, accessToken, fileBuffer, mimeType, originalName) {
+  const FormData = require('form-data')
+  const form = new FormData()
+  form.append('messaging_product', 'whatsapp')
+  form.append('type', mimeType)
+  form.append('file', fileBuffer, { filename: originalName, contentType: mimeType })
+
+  const { data } = await metaApi.post(`/${phoneNumberId}/media`, form, {
+    params:  { access_token: accessToken },
+    headers: form.getHeaders(),
+    maxBodyLength:   Infinity,
+    maxContentLength: Infinity,
+  })
+  return data  // { id: "handle_id" }
+}
+
+/**
+ * Delete a media file from Meta API via DELETE /{media_id}.
+ */
+async function deleteMedia(mediaId, accessToken) {
+  const { data } = await metaApi.delete(`/${mediaId}`, {
+    params: { access_token: accessToken },
+  })
+  return data  // { success: true }
+}
+
 module.exports = {
   getWabasFromToken,
   getWabaInfo,
@@ -368,4 +400,6 @@ module.exports = {
   sendMessage,
   subscribeWebhook,
   getWebhookSubscriptions,
+  uploadMedia,
+  deleteMedia,
 }

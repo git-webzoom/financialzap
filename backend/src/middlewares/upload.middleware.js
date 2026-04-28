@@ -42,4 +42,36 @@ function csvUploadMiddleware(req, res, next) {
   })
 }
 
-module.exports = { csvUploadMiddleware }
+// ─── Mídia para Meta API ──────────────────────────────────────────────────────
+
+const MEDIA_ALLOWED_MIMES = [
+  'image/jpeg', 'image/png', 'image/webp',
+  'video/mp4',
+  'application/pdf',
+]
+const MEDIA_ALLOWED_EXTS = ['.jpg', '.jpeg', '.png', '.webp', '.mp4', '.pdf']
+
+function mediaFileFilter(_req, file, cb) {
+  const ext = '.' + file.originalname.toLowerCase().split('.').pop()
+  const ok  = MEDIA_ALLOWED_MIMES.includes(file.mimetype) || MEDIA_ALLOWED_EXTS.includes(ext)
+  if (ok) cb(null, true)
+  else cb(new Error('Formato não suportado. Aceitos: JPG, PNG, WEBP, MP4, PDF.'), false)
+}
+
+const uploadMedia = multer({
+  storage,
+  fileFilter: mediaFileFilter,
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB (validação fina por tipo no service)
+}).single('file')
+
+function mediaUploadMiddleware(req, res, next) {
+  uploadMedia(req, res, (err) => {
+    if (!err) return next()
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'Arquivo muito grande. Máximo: imagem 5 MB, vídeo 16 MB, PDF 100 MB.' })
+    }
+    return res.status(400).json({ error: err.message || 'Erro no upload do arquivo.' })
+  })
+}
+
+module.exports = { csvUploadMiddleware, mediaUploadMiddleware }

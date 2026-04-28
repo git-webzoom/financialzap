@@ -5,6 +5,7 @@ const NAV = [
   { to: '/dashboard',          label: 'Dashboard',    icon: IconGrid    },
   { to: '/wabas',              label: 'WABAs',         icon: IconPhone   },
   { to: '/templates',          label: 'Templates',     icon: IconDoc     },
+  { to: '/midia',              label: 'Mídia',         icon: IconMedia   },
   { to: '/disparos/novo',      label: 'Novo Disparo',  icon: IconSend    },
   { to: '/disparos/historico', label: 'Histórico',     icon: IconClock   },
   { to: '/kanban',             label: 'Contingência BMs', icon: IconKanban  },
@@ -187,6 +188,16 @@ function IconRegua() {
       <path d="M3 5h14M3 10h10M3 15h6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
       <circle cx="16" cy="13" r="2.5" stroke="currentColor" strokeWidth="1.5"/>
       <path d="M16 10.5V10M16 15.5V16M13.5 13H13M18.5 13H19M14.27 11.27l-.36-.36M18.09 15.09l-.36-.36M14.27 14.73l-.36.36M18.09 10.91l-.36.36" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+    </svg>
+  )
+}
+
+function IconMedia() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <rect x="2" y="4" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="1.6"/>
+      <circle cx="7" cy="9" r="1.5" stroke="currentColor" strokeWidth="1.4"/>
+      <path d="M2 14l4-4 3 3 3-3 4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
   )
 }

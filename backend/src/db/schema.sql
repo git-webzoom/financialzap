@@ -335,3 +335,25 @@ CREATE TABLE IF NOT EXISTS fluxo_mensagens (
 );
 
 CREATE INDEX IF NOT EXISTS idx_fluxo_mensagens_grupo_id ON fluxo_mensagens(grupo_id);
+
+-- ─── media_uploads ────────────────────────────────────────────────────────────
+-- Mídias enviadas para a Meta via /{phone_number_id}/media.
+-- handle_id: ID retornado pela Meta, usado como header_handle nos templates.
+CREATE TABLE IF NOT EXISTS media_uploads (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id         INTEGER NOT NULL,
+  waba_id         TEXT    NOT NULL,
+  phone_number_id TEXT    NOT NULL,
+  handle_id       TEXT    NOT NULL UNIQUE,
+  original_name   TEXT    NOT NULL,
+  mime_type       TEXT    NOT NULL,
+  file_size       INTEGER NOT NULL,
+  media_type      TEXT    NOT NULL CHECK (media_type IN ('IMAGE','VIDEO','DOCUMENT')),
+  created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (waba_id) REFERENCES wabas(waba_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_media_uploads_user_id    ON media_uploads(user_id);
+CREATE INDEX IF NOT EXISTS idx_media_uploads_waba_id    ON media_uploads(waba_id);
+CREATE INDEX IF NOT EXISTS idx_media_uploads_media_type ON media_uploads(media_type);

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { listMedia } from '../../services/midiaService'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -45,7 +46,7 @@ function isValidName(name) {
   return /^[a-z0-9_]+$/.test(name)
 }
 
-function buildComponents({ headerType, headerText, headerMediaUrl, bodyText, varExamples, footerText, buttons }) {
+function buildComponents({ headerType, headerText, headerMediaUrl, headerHandleId, bodyText, varExamples, footerText, buttons }) {
   const components = []
 
   // Header
@@ -53,9 +54,9 @@ function buildComponents({ headerType, headerText, headerMediaUrl, bodyText, var
     components.push({ type: 'HEADER', format: 'TEXT', text: headerText.trim() })
   } else if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerType)) {
     const comp = { type: 'HEADER', format: headerType }
-    // Salva a URL no example para exibição local no card.
-    // O backend remove o example antes de enviar para a Meta (exceto IMAGE que a Meta aceita).
-    if (headerMediaUrl.trim()) {
+    if (headerHandleId?.trim()) {
+      comp.example = { header_handle: [headerHandleId.trim()] }
+    } else if (headerMediaUrl.trim()) {
       comp.example = { header_url: [headerMediaUrl.trim()] }
     }
     components.push(comp)
@@ -102,9 +103,12 @@ export default function TemplateForm({ wabas = [], onSubmit, onBatchSubmit, onCa
   const [category,       setCategory]       = useState('MARKETING')
   const [language,       setLanguage]       = useState('pt_BR')
   // Header
-  const [headerType,     setHeaderType]     = useState('none')
-  const [headerText,     setHeaderText]     = useState('')
-  const [headerMediaUrl, setHeaderMediaUrl] = useState('')
+  const [headerType,      setHeaderType]      = useState('none')
+  const [headerText,      setHeaderText]      = useState('')
+  const [headerMediaUrl,  setHeaderMediaUrl]  = useState('')
+  const [headerHandleId,  setHeaderHandleId]  = useState('')
+  const [headerHandleName,setHeaderHandleName]= useState('')
+  const [useHandleMode,   setUseHandleMode]   = useState(false)
   // Body
   const [bodyText,       setBodyText]       = useState('')
   const [varExamples,    setVarExamples]    = useState([])
@@ -182,6 +186,7 @@ export default function TemplateForm({ wabas = [], onSubmit, onBatchSubmit, onCa
 
     const components = buildComponents({
       headerType, headerText, headerMediaUrl,
+      headerHandleId: useHandleMode ? headerHandleId : '',
       bodyText, varExamples,
       footerText,
       buttons,
@@ -300,7 +305,7 @@ export default function TemplateForm({ wabas = [], onSubmit, onBatchSubmit, onCa
                 <label key={opt.value} className={`tf-radio${headerType === opt.value ? ' tf-radio--active' : ''}`}>
                   <input type="radio" name="header" value={opt.value}
                     checked={headerType === opt.value}
-                    onChange={() => { setHeaderType(opt.value); setHeaderText(''); setHeaderMediaUrl('') }}
+                    onChange={() => { setHeaderType(opt.value); setHeaderText(''); setHeaderMediaUrl(''); setHeaderHandleId(''); setHeaderHandleName(''); setUseHandleMode(false) }}
                     disabled={submitting} />
                   {opt.label}
                 </label>
@@ -326,25 +331,59 @@ export default function TemplateForm({ wabas = [], onSubmit, onBatchSubmit, onCa
           {['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerType) && (
             <div className="tf-field">
               <label className="tf-label">
-                URL de exemplo da mídia
+                Mídia do cabeçalho
                 <span className="tf-hint">obrigatório pela Meta para aprovação</span>
               </label>
-              <input
-                className="tf-input"
-                value={headerMediaUrl}
-                onChange={e => setHeaderMediaUrl(e.target.value)}
-                placeholder={
-                  headerType === 'IMAGE'    ? 'https://exemplo.com/imagem.jpg' :
-                  headerType === 'VIDEO'    ? 'https://exemplo.com/video.mp4' :
-                                              'https://exemplo.com/documento.pdf'
-                }
-                disabled={submitting}
-              />
-              <span className="tf-hint-inline">
-                {headerType === 'IMAGE'    && 'Formatos: JPG, PNG, WEBP — máx 5 MB'}
-                {headerType === 'VIDEO'    && 'Formato: MP4 — máx 16 MB'}
-                {headerType === 'DOCUMENT' && 'Formato: PDF — máx 100 MB'}
-              </span>
+
+              {/* Toggle: Galeria vs URL */}
+              <div className="tf-radio-group" style={{ marginBottom: 8 }}>
+                <label className={`tf-radio${!useHandleMode ? ' tf-radio--active' : ''}`}>
+                  <input type="radio" name="media-mode" checked={!useHandleMode}
+                    onChange={() => { setUseHandleMode(false); setHeaderHandleId(''); setHeaderHandleName('') }}
+                    disabled={submitting} />
+                  URL de exemplo
+                </label>
+                <label className={`tf-radio${useHandleMode ? ' tf-radio--active' : ''}`}>
+                  <input type="radio" name="media-mode" checked={useHandleMode}
+                    onChange={() => { setUseHandleMode(true); setHeaderMediaUrl('') }}
+                    disabled={submitting} />
+                  Galeria de Mídia
+                </label>
+              </div>
+
+              {useHandleMode ? (
+                <MediaPickerInline
+                  mediaType={headerType}
+                  selectedHandleId={headerHandleId}
+                  onSelect={(handle, name) => { setHeaderHandleId(handle); setHeaderHandleName(name) }}
+                />
+              ) : (
+                <>
+                  <input
+                    className="tf-input"
+                    value={headerMediaUrl}
+                    onChange={e => setHeaderMediaUrl(e.target.value)}
+                    placeholder={
+                      headerType === 'IMAGE'    ? 'https://exemplo.com/imagem.jpg' :
+                      headerType === 'VIDEO'    ? 'https://exemplo.com/video.mp4' :
+                                                  'https://exemplo.com/documento.pdf'
+                    }
+                    disabled={submitting}
+                  />
+                  <span className="tf-hint-inline">
+                    {headerType === 'IMAGE'    && 'Formatos: JPG, PNG, WEBP — máx 5 MB'}
+                    {headerType === 'VIDEO'    && 'Formato: MP4 — máx 16 MB · Use a Galeria de Mídia para garantir aprovação'}
+                    {headerType === 'DOCUMENT' && 'Formato: PDF — máx 100 MB · Use a Galeria de Mídia para garantir aprovação'}
+                  </span>
+                </>
+              )}
+
+              {useHandleMode && headerHandleId && (
+                <div className="tf-selected-media">
+                  <span className="tf-selected-media-name">{headerHandleName}</span>
+                  <code className="tf-selected-media-handle">{headerHandleId.slice(0, 16)}…</code>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -588,6 +627,63 @@ export default function TemplateForm({ wabas = [], onSubmit, onBatchSubmit, onCa
 
       </form>
     </>
+  )
+}
+
+// ─── MediaPickerInline ────────────────────────────────────────────────────────
+
+function MediaPickerInline({ mediaType, selectedHandleId, onSelect }) {
+  const [medias,  setMedias]  = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    listMedia(mediaType)
+      .then(d => setMedias(d.medias || []))
+      .catch(() => setMedias([]))
+      .finally(() => setLoading(false))
+  }, [mediaType])
+
+  if (loading) {
+    return <div className="tf-media-picker"><span className="tf-hint" style={{ color: '#4a5568' }}>Carregando galeria…</span></div>
+  }
+
+  if (medias.length === 0) {
+    return (
+      <div className="tf-media-picker">
+        <span className="tf-hint" style={{ color: '#4a5568' }}>
+          Nenhuma mídia disponível.{' '}
+          <a href="/midia" target="_blank" rel="noreferrer" className="tf-link">Abrir Galeria</a>
+          {' '}para fazer upload.
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="tf-media-picker">
+      <div className="tf-media-list">
+        {medias.map(m => (
+          <div
+            key={m.id}
+            className={`tf-media-item${selectedHandleId === m.handle_id ? ' tf-media-item--selected' : ''}`}
+            onClick={() => onSelect(m.handle_id, m.original_name)}
+          >
+            <span className="tf-media-item-icon">
+              {m.media_type === 'IMAGE' ? '🖼' : m.media_type === 'VIDEO' ? '🎬' : '📄'}
+            </span>
+            <span className="tf-media-item-name">{m.original_name}</span>
+            <span className="tf-media-item-handle">{m.handle_id.slice(0, 14)}…</span>
+            {selectedHandleId === m.handle_id && (
+              <span className="tf-media-item-check">✓</span>
+            )}
+          </div>
+        ))}
+      </div>
+      <a href="/midia" target="_blank" rel="noreferrer" className="tf-link" style={{ fontSize: 11 }}>
+        Gerenciar galeria →
+      </a>
+    </div>
   )
 }
 
@@ -921,6 +1017,83 @@ const CSS = `
     font-weight: 500;
     text-align: center;
     padding: 3px 0;
+  }
+
+  /* ── Media picker ── */
+  .tf-media-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .tf-media-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #252c38;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+  }
+  .tf-media-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #1a1f28;
+    transition: background 0.12s;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    color: #8a94a6;
+  }
+  .tf-media-item:last-child { border-bottom: none; }
+  .tf-media-item:hover { background: #1a1f28; color: #e8edf5; }
+  .tf-media-item--selected { background: #22c55e10; color: #86efac; }
+  .tf-media-item-icon { font-size: 14px; flex-shrink: 0; }
+  .tf-media-item-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tf-media-item-handle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #4a5568;
+    flex-shrink: 0;
+  }
+  .tf-media-item-check {
+    font-size: 11px;
+    color: #22c55e;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .tf-link { color: #22c55e; text-decoration: none; }
+  .tf-link:hover { text-decoration: underline; }
+
+  .tf-selected-media {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: #22c55e10;
+    border: 1px solid #22c55e30;
+    border-radius: 6px;
+    margin-top: 4px;
+  }
+  .tf-selected-media-name {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    color: #86efac;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tf-selected-media-handle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #4a7c59;
+    flex-shrink: 0;
   }
 
   /* ── Error banner ── */

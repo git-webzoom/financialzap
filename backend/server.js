@@ -23,6 +23,7 @@ app.use('/api/kanban',     require('./src/routes/kanban.routes'))
 app.use('/api/inventory',  require('./src/routes/inventory.routes'))
 app.use('/api/suppliers',  require('./src/routes/supplier.routes'))
 app.use('/api/fluxo',      require('./src/routes/fluxo.routes'))
+app.use('/api/midia',      require('./src/routes/midia.routes'))
 
 // Run migrations then start server
 migrate()

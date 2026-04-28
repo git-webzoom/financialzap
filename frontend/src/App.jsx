@@ -12,6 +12,7 @@ import Kanban from './pages/Kanban'
 import Inventario from './pages/Inventario'
 import Fornecedores from './pages/Fornecedores'
 import FluxoMensagens from './pages/FluxoMensagens'
+import Midia from './pages/Midia'
 
 // Layout
 import Layout from './components/Layout/Layout'
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="inventario"          element={<Inventario />} />
           <Route path="fornecedores"        element={<Fornecedores />} />
           <Route path="fluxo-mensagens"      element={<FluxoMensagens />} />
+          <Route path="midia"               element={<Midia />} />
           <Route path="configuracoes"       element={<Configuracoes />} />
         </Route>
 

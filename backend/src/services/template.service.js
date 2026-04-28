@@ -52,17 +52,18 @@ async function listTemplates(userId, wabaId = null) {
  * Create a template on Meta then save it locally.
  * payload follows the Meta message_templates format.
  */
-// Garante que componentes HEADER com mídia tenham o campo example no formato correto.
-// IMAGE/VIDEO/DOCUMENT: a Meta aceita example.header_url com URL pública.
+// Garante que componentes HEADER com mídia tenham o campo example correto para a Meta.
+// header_handle (upload via galeria): aceito para IMAGE, VIDEO e DOCUMENT.
+// header_url (URL pública): aceito apenas para IMAGE; VIDEO/DOCUMENT são removidos.
 function _toMetaComponents(components = []) {
   return components.map(c => {
     if (c.type === 'HEADER' && ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(c.format)) {
+      if (c.example?.header_handle?.length) return c           // handle da galeria — passa direto
       if (c.example?.header_url?.length) {
-        return c // já está no formato correto
+        if (c.format === 'IMAGE') return c                     // IMAGE aceita URL
+        const { example, ...rest } = c; return rest            // VIDEO/DOCUMENT — remove URL inválida
       }
-      // Sem URL — remove o example para não enviar campo inválido
-      const { example, ...rest } = c
-      return rest
+      const { example, ...rest } = c; return rest              // sem exemplo
     }
     return c
   })
@@ -86,9 +87,7 @@ async function createTemplate(userId, wabaId, payload) {
 
   // Para a Meta: VIDEO/DOCUMENT precisam de header_handle; IMAGE aceita header_url.
   // Mantemos o payload original (com header_url) para salvar no banco e exibição no card.
-  console.log('[createTemplate] components recebidos:', JSON.stringify(payload.components))
   const metaPayload = { ...payload, components: _toMetaComponents(payload.components) }
-  console.log('[createTemplate] components enviados para Meta:', JSON.stringify(metaPayload.components))
 
   // Call Meta API
   let metaResult
