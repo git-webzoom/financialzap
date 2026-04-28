@@ -52,6 +52,21 @@ async function listTemplates(userId, wabaId = null) {
  * Create a template on Meta then save it locally.
  * payload follows the Meta message_templates format.
  */
+// Transforma componentes para o formato esperado pela Meta API.
+// VIDEO/DOCUMENT: converte header_url → header_handle.
+// IMAGE: passa header_url diretamente (Meta aceita).
+function _toMetaComponents(components = []) {
+  return components.map(c => {
+    if (c.type === 'HEADER' && ['VIDEO', 'DOCUMENT'].includes(c.format)) {
+      if (c.example?.header_url?.length) {
+        return { ...c, example: { header_handle: c.example.header_url } }
+      }
+      return { ...c, example: { header_handle: [''] } }
+    }
+    return c
+  })
+}
+
 async function createTemplate(userId, wabaId, payload) {
   const db = getDb()
 
@@ -68,16 +83,9 @@ async function createTemplate(userId, wabaId, payload) {
 
   const token = wabaService.getDecryptedToken(rows[0])
 
-  // Para a Meta: remove example de VIDEO/DOCUMENT (ela não aceita header_url nesses formatos)
-  // Para o banco: mantém o example com a URL para exibição no card
-  const metaComponents = (payload.components || []).map(c => {
-    if (c.type === 'HEADER' && ['VIDEO', 'DOCUMENT'].includes(c.format) && c.example) {
-      const { example, ...rest } = c
-      return rest
-    }
-    return c
-  })
-  const metaPayload = { ...payload, components: metaComponents }
+  // Para a Meta: VIDEO/DOCUMENT precisam de header_handle; IMAGE aceita header_url.
+  // Mantemos o payload original (com header_url) para salvar no banco e exibição no card.
+  const metaPayload = { ...payload, components: _toMetaComponents(payload.components) }
 
   // Call Meta API
   let metaResult
@@ -172,7 +180,7 @@ async function batchCreateTemplates(userId, wabaId, { nameBase, count, category,
         name: templateName,
         category,
         language,
-        components,
+        components: _toMetaComponents(components),
       })
 
       await db.execute({

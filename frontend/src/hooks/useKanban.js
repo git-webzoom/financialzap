@@ -80,19 +80,21 @@ export function useKanban() {
 
   // Optimistic column reorder — swaps positions locally then persists both
   const moveColumn = useCallback(async (activeId, overId) => {
+    // Capture positions before optimistic update
+    const activePos = columns.findIndex(c => c.id === activeId)
+    const overPos   = columns.findIndex(c => c.id === overId)
+    if (activePos === -1 || overPos === -1 || activePos === overPos) return
+
     setColumns(prev => {
-      const from = prev.findIndex(c => c.id === activeId)
-      const to   = prev.findIndex(c => c.id === overId)
-      if (from === -1 || to === -1 || from === to) return prev
       const next = [...prev]
-      const [moved] = next.splice(from, 1)
-      next.splice(to, 0, moved)
+      const [moved] = next.splice(activePos, 1)
+      next.splice(overPos, 0, moved)
       return next.map((c, i) => ({ ...c, position: i }))
     })
     try {
       const newCols = await Promise.all([
-        kanbanService.updateColumn(activeId, { position: columns.findIndex(c => c.id === overId) }),
-        kanbanService.updateColumn(overId,   { position: columns.findIndex(c => c.id === activeId) }),
+        kanbanService.updateColumn(activeId, { position: overPos }),
+        kanbanService.updateColumn(overId,   { position: activePos }),
       ])
       setColumns(prev => prev.map(c => {
         const updated = newCols.find(u => u.id === c.id)
