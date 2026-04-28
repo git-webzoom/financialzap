@@ -370,9 +370,11 @@ async function uploadMedia(phoneNumberId, accessToken, fileBuffer, mimeType, ori
   form.append('file', fileBuffer, { filename: originalName, contentType: mimeType })
 
   const { data } = await metaApi.post(`/${phoneNumberId}/media`, form, {
-    params:  { access_token: accessToken },
-    headers: form.getHeaders(),
-    maxBodyLength:   Infinity,
+    headers: {
+      ...form.getHeaders(),
+      Authorization: `Bearer ${accessToken}`,
+    },
+    maxBodyLength:    Infinity,
     maxContentLength: Infinity,
   })
   return data  // { id: "handle_id" }
