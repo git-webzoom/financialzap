@@ -3,6 +3,7 @@ import { useWabas } from '../../hooks/useWabas'
 import WabaCard from '../../components/Wabas/WabaCard'
 import ConectarWaba from '../../components/Wabas/EmbeddedSignup'
 import * as wabaService from '../../services/wabaService'
+import { wabaLabel } from '../../utils/waba'
 
 export default function Wabas() {
   const { groups, loading, error, load, connect, revoke, sync } = useWabas()
@@ -34,7 +35,7 @@ export default function Wabas() {
     setConnectSuccess('')
     try {
       const waba = await connect(payload)
-      setConnectSuccess(`WABA "${waba.name || waba.waba_id}" conectada com sucesso!`)
+      setConnectSuccess(`WABA "${wabaLabel(waba.name, waba.waba_id)}" conectada com sucesso!`)
       setTimeout(() => setConnectSuccess(''), 5000)
     } catch (err) {
       setConnectError(err.response?.data?.error || err.message || 'Erro ao conectar WABA')

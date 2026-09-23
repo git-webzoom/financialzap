@@ -1,3 +1,4 @@
+import { wabaLabel } from '../../utils/waba'
 // ─── TemplateCard ─────────────────────────────────────────────────────────────
 // Exibe um template com nome, status, categoria, idioma e estrutura de componentes.
 
@@ -85,7 +86,7 @@ export default function TemplateCard({ template }) {
           <div className="tc-title-wrap">
             <span className="tc-name">{template.name}</span>
             {template.waba_name && (
-              <span className="tc-waba">{template.waba_name}</span>
+              <span className="tc-waba">{wabaLabel(template.waba_name, template.waba_id)}</span>
             )}
           </div>
 

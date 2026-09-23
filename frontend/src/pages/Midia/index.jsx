@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import * as midiaService from '../../services/midiaService'
 import * as wabaService  from '../../services/wabaService'
+import { wabaLabel } from '../../utils/waba'
 
 const FILTER_LABELS = { ALL: 'Todos', IMAGE: 'Imagens', VIDEO: 'Vídeos', DOCUMENT: 'Documentos' }
 
@@ -163,7 +164,7 @@ export default function Midia() {
                 >
                   <option value="">Selecione a WABA</option>
                   {wabas.map(w => (
-                    <option key={w.waba_id} value={w.waba_id}>{w.name || w.waba_id}</option>
+                    <option key={w.waba_id} value={w.waba_id}>{wabaLabel(w.name, w.waba_id)}</option>
                   ))}
                 </select>
               </div>

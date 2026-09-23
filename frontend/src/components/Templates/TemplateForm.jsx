@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { listMedia } from '../../services/midiaService'
+import { wabaLabel } from '../../utils/waba'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -238,7 +239,7 @@ export default function TemplateForm({ wabas = [], onSubmit, onBatchSubmit, onCa
             <label className="tf-label">WABA</label>
             <select className="tf-select" value={wabaId} onChange={e => setWabaId(e.target.value)} disabled={submitting}>
               <option value="">Selecione a WABA</option>
-              {wabas.map(w => <option key={w.waba_id} value={w.waba_id}>{w.name || w.waba_id}</option>)}
+              {wabas.map(w => <option key={w.waba_id} value={w.waba_id}>{wabaLabel(w.name, w.waba_id)}</option>)}
             </select>
           </div>
         </div>

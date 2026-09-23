@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import NumeroItem from './NumeroItem'
 import { subscribeWebhook, getWabaHealth } from '../../services/wabaService'
+import { wabaLabel } from '../../utils/waba'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -113,7 +114,7 @@ export default function WabaCard({ waba, phoneNumbers = [], onRevoke, onSync }) 
   }
 
   async function handleRevoke() {
-    if (!window.confirm(`Desconectar a WABA "${waba.name || waba.waba_id}"? Esta ação removerá os dados locais.`)) return
+    if (!window.confirm(`Desconectar a WABA "${wabaLabel(waba.name, waba.waba_id)}"? Esta ação removerá os dados locais.`)) return
     setRevoking(true)
     try {
       await onRevoke(waba.waba_id)
@@ -137,7 +138,7 @@ export default function WabaCard({ waba, phoneNumbers = [], onRevoke, onSync }) 
           </button>
 
           <div className="wc-title">
-            <span className="wc-name">{waba.name || 'WABA sem nome'}</span>
+            <span className="wc-name">{wabaLabel(waba.name || 'WABA sem nome', waba.waba_id)}</span>
             <span className="wc-id">{waba.waba_id}</span>
           </div>
 

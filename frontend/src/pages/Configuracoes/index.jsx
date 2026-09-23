@@ -10,6 +10,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { getMe, updateMe, listUsers, createUser, deleteUser } from '../../services/authService'
 import { listWabas, subscribeWebhook, getWebhookStatus, webhookDebug } from '../../services/wabaService'
+import { wabaLabel } from '../../utils/waba'
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -549,7 +550,7 @@ function WebhookSection() {
               <div key={w.waba_id} className="wh-row-wrap">
                 <div className="wh-row">
                   <div className="wh-row-left">
-                    <span className="wh-waba-name">{w.name || w.waba_id}</span>
+                    <span className="wh-waba-name">{wabaLabel(w.name, w.waba_id)}</span>
                     <span className="wh-waba-id">{w.waba_id}</span>
                   </div>
 

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { wabaLabel } from '../../utils/waba'
 
 /**
  * Etapa 4 — Revisão completa antes de disparar
@@ -54,7 +55,7 @@ export default function PreviewMensagem({ draft, wabas = [], phones = [], onTest
           <p className="pm-card-title">Resumo da campanha</p>
           <div className="pm-grid">
             <PmItem label="Nome"       value={name || '—'} />
-            <PmItem label="WABA"       value={waba?.name || wabaId || '—'} />
+            <PmItem label="WABA"       value={wabaLabel(waba?.name, wabaId) || '—'} />
             <PmItem label="Número"     value={phone ? `${phone.display_phone_number} — ${phone.verified_name || ''}` : phoneNumberId || '—'} />
             <PmItem label="Velocidade" value={`${speed} msg/s`} />
             <PmItem label="Disparo"    value={scheduleType === 'immediate' ? 'Imediato' : `Agendado: ${formatDate(scheduledAt)}`} />

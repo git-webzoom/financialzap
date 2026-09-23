@@ -4,6 +4,7 @@ import { useWabas } from '../../hooks/useWabas'
 import TemplateForm from '../../components/Templates/TemplateForm'
 import * as wabaService  from '../../services/wabaService'
 import * as midiaService from '../../services/midiaService'
+import { wabaLabel } from '../../utils/waba'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -355,7 +356,7 @@ export default function Templates() {
           <div className="tp-banner tp-banner--ok">
             {Object.entries(syncFeedback).map(([wid, msg]) => (
               <div key={wid}>
-                <span className="tp-sync-waba">{wabas.find(w => w.waba_id === wid)?.name || wid}</span>
+                <span className="tp-sync-waba">{wabaLabel(wabas.find(w => w.waba_id === wid)?.name, wid)}</span>
                 {' — '}{msg}
               </div>
             ))}
@@ -407,7 +408,7 @@ export default function Templates() {
           >
             <option value="">Todas as WABAs</option>
             {wabas.map(w => (
-              <option key={w.waba_id} value={w.waba_id}>{w.name || w.waba_id}</option>
+              <option key={w.waba_id} value={w.waba_id}>{wabaLabel(w.name, w.waba_id)}</option>
             ))}
           </select>
 
@@ -489,7 +490,7 @@ export default function Templates() {
                       <td className="tbl-td">{t.language || '—'}</td>
                       <td className="tbl-td"><StatusBadge status={t.status} /></td>
                       <td className="tbl-td">
-                        {wabas.find(w => w.waba_id === t.waba_id)?.name || t.waba_id || '—'}
+                        {wabaLabel(wabas.find(w => w.waba_id === t.waba_id)?.name, t.waba_id) || '—'}
                       </td>
                       <td className="tbl-td tbl-td--date">{formatDatePT(t.created_at)}</td>
                       <td className="tbl-td tbl-td--actions" onClick={e => e.stopPropagation()}>
@@ -623,7 +624,7 @@ function TemplateModal({ template: t, onClose, onDelete, deleting, deleteError }
         <div className="tdm-meta">
           <MetaItem label="Categoria"  value={CATEGORY_LABELS[t.category] || t.category || '—'} />
           <MetaItem label="Idioma"     value={t.language || '—'} />
-          <MetaItem label="WABA"       value={t.waba_name || t.waba_id} mono />
+          <MetaItem label="WABA"       value={wabaLabel(t.waba_name, t.waba_id)} mono />
           <MetaItem label="ID"         value={t.template_id} mono />
           {t.rejected_reason && (
             <MetaItem label="Motivo rejeição" value={t.rejected_reason} danger />

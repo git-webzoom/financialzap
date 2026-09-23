@@ -9,6 +9,7 @@ import UploadCSV              from '../../../components/Disparos/UploadCSV'
 import SelecionarTemplates    from '../../../components/Disparos/SelecionarTemplates'
 import MapearColunas          from '../../../components/Disparos/MapearColunas'
 import PreviewMensagem        from '../../../components/Disparos/PreviewMensagem'
+import { wabaLabel } from '../../../utils/waba'
 
 const STEPS = [
   { num: 1, label: 'Upload CSV'     },
@@ -180,7 +181,7 @@ export default function DisparosNovo() {
                   <label className="wz-label">WABA</label>
                   <select className="wz-select" value={draft.wabaId} onChange={e => setConfig({ wabaId: e.target.value, phoneNumberId: '', templates: [], weights: [] })}>
                     <option value="">— selecione a WABA —</option>
-                    {wabas.map(w => <option key={w.waba_id} value={w.waba_id}>{w.name || w.waba_id}</option>)}
+                    {wabas.map(w => <option key={w.waba_id} value={w.waba_id}>{wabaLabel(w.name, w.waba_id)}</option>)}
                   </select>
                 </div>
 
