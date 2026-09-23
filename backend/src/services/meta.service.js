@@ -40,6 +40,36 @@ async function getWabasFromToken(accessToken) {
     log('me', `failed: ${err.response?.data?.error?.message || err.message}`)
   }
 
+  // ── Strategy 0: debug_token granular scopes ─────────────────────────────────
+  // Most reliable for System User tokens: lists the exact WABA IDs the token was
+  // granted whatsapp_business_management / whatsapp_business_messaging on.
+  let grantedScopes = []
+  try {
+    const { data: dbg } = await metaApi.get('/debug_token', {
+      params: { input_token: accessToken, access_token: accessToken },
+    })
+    const info = dbg.data || {}
+    grantedScopes = info.scopes || []
+    const wabaIds = new Set()
+    for (const gs of info.granular_scopes || []) {
+      if (gs.scope === 'whatsapp_business_management' || gs.scope === 'whatsapp_business_messaging') {
+        for (const id of gs.target_ids || []) wabaIds.add(id)
+      }
+    }
+    for (const id of wabaIds) {
+      try {
+        const w = await getWabaInfo(id, accessToken)
+        wabaMap[id] = w.name || id
+      } catch (err) {
+        wabaMap[id] = id
+        log('strategy0 debug_token', `waba=${id} info failed: ${err.response?.data?.error?.message || err.message}`)
+      }
+    }
+    log('strategy0 debug_token', `type=${info.type} scopes=${grantedScopes.join(',')} found ${wabaIds.size}`)
+  } catch (err) {
+    log('strategy0 debug_token', `failed: ${err.response?.data?.error?.message || err.message}`)
+  }
+
   // ── Strategy 1: System User assigned WABAs ───────────────────────────────────
   // Most common for permanent System User tokens used in WhatsApp integrations.
   if (meId) {
@@ -132,8 +162,11 @@ async function getWabasFromToken(accessToken) {
   log('result', `total WABAs found: ${Object.keys(wabaMap).length}`)
 
   if (!Object.keys(wabaMap).length) {
+    const hint = grantedScopes.includes('whatsapp_business_management')
+      ? 'O token tem a permissão whatsapp_business_management, mas nenhuma WABA foi atribuída ao usuário do sistema. No Business Manager, vá em Usuários do sistema → Atribuir ativos → Contas do WhatsApp e gere o token novamente.'
+      : 'O token não tem a permissão whatsapp_business_management. Gere um novo token do usuário do sistema marcando whatsapp_business_management e whatsapp_business_messaging.'
     throw Object.assign(
-      new Error('Nenhuma WABA encontrada para este token. Verifique as permissões e tente novamente.'),
+      new Error(`Nenhuma WABA encontrada para este token. ${hint}`),
       { status: 422 }
     )
   }
