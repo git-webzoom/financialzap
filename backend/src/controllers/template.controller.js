@@ -40,6 +40,7 @@ async function sync(req, res) {
     const count = await templateService.syncByWaba(req.user.sub, req.params.wabaId)
     res.json({ ok: true, templates_synced: count })
   } catch (err) {
+    console.error(`[templates:sync] waba=${req.params.wabaId} failed:`, err.message)
     res.status(err.status || 500).json({ error: err.message })
   }
 }

@@ -225,7 +225,7 @@ export default function Templates() {
         const r = await sync(wid)
         setSyncFeedback(prev => ({ ...prev, [wid]: `${r.templates_synced} templates` }))
       } catch (err) {
-        setSyncFeedback(prev => ({ ...prev, [wid]: `erro: ${err.message}` }))
+        setSyncFeedback(prev => ({ ...prev, [wid]: `erro: ${err.response?.data?.error || err.message}` }))
       }
     }
     await load(filterWabaId || null)

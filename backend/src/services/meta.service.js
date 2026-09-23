@@ -5,6 +5,15 @@ const API_VERSION = process.env.META_API_VERSION || 'v20.0'
 
 const metaApi = axios.create({ baseURL: `${BASE_URL}/${API_VERSION}` })
 
+// Replace axios' generic "Request failed with status code N" with Meta's own error message
+metaApi.interceptors.response.use(null, (err) => {
+  const e = err.response?.data?.error
+  if (e?.message) {
+    err.message = `${e.error_user_msg || e.message}${e.code ? ` (#${e.code}${e.error_subcode ? `/${e.error_subcode}` : ''})` : ''}`
+  }
+  return Promise.reject(err)
+})
+
 // ─── WABAs from token ─────────────────────────────────────────────────────────
 
 /**
