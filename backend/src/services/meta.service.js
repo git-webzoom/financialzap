@@ -24,7 +24,7 @@ const metaApi = axios.create({ baseURL: `${BASE_URL}/${API_VERSION}` })
  *
  * Returns: [{ waba_id, name }]
  */
-async function getWabasFromToken(accessToken) {
+async function getWabasFromToken(accessToken, businessId = null) {
   const wabaMap = {} // waba_id → name, deduplicates across strategies
   const log = (tag, msg) => console.log(`[getWabasFromToken] ${tag}: ${msg}`)
 
@@ -38,6 +38,23 @@ async function getWabasFromToken(accessToken) {
     log('me', `id=${me.id} name=${me.name}`)
   } catch (err) {
     log('me', `failed: ${err.response?.data?.error?.message || err.message}`)
+  }
+
+  // ── Strategy BM: explicit Business Manager ID ───────────────────────────────
+  // Needed for admin System User tokens, whose granular scopes "apply to all objects"
+  // (no target_ids) and whose /me/businesses may come back empty.
+  if (businessId) {
+    for (const edge of ['owned_whatsapp_business_accounts', 'client_whatsapp_business_accounts']) {
+      try {
+        const { data } = await metaApi.get(`/${businessId}/${edge}`, {
+          params: { fields: 'id,name', access_token: accessToken, limit: 100 },
+        })
+        for (const w of data.data || []) wabaMap[w.id] = w.name || w.id
+        log(`strategyBM ${edge}`, `found ${(data.data || []).length}`)
+      } catch (err) {
+        log(`strategyBM ${edge}`, `failed: ${err.response?.data?.error?.message || err.message}`)
+      }
+    }
   }
 
   // ── Strategy 0: debug_token granular scopes ─────────────────────────────────
@@ -91,17 +108,17 @@ async function getWabasFromToken(accessToken) {
   try {
     const { data: bmData } = await metaApi.get('/me/businesses', {
       params: {
-        fields: 'id,name,owned_whatsapp_business_accounts{id,name}',
+        fields: 'id,name,owned_whatsapp_business_accounts{id,name},client_whatsapp_business_accounts{id,name}',
         access_token: accessToken,
         limit: 100,
       },
     })
     for (const bm of bmData.data || []) {
-      for (const w of bm.owned_whatsapp_business_accounts?.data || []) {
+      for (const w of [...(bm.owned_whatsapp_business_accounts?.data || []), ...(bm.client_whatsapp_business_accounts?.data || [])]) {
         wabaMap[w.id] = w.name || w.id
       }
     }
-    log('strategy2 businesses', `found ${Object.keys(wabaMap).length} total`)
+    log('strategy2 businesses', `bms=${(bmData.data || []).map(b => b.id).join(',') || 'none'} found ${Object.keys(wabaMap).length} total`)
   } catch (err) {
     log('strategy2 businesses', `failed: ${err.response?.data?.error?.message || err.message}`)
   }
@@ -162,9 +179,11 @@ async function getWabasFromToken(accessToken) {
   log('result', `total WABAs found: ${Object.keys(wabaMap).length}`)
 
   if (!Object.keys(wabaMap).length) {
-    const hint = grantedScopes.includes('whatsapp_business_management')
-      ? 'O token tem a permissão whatsapp_business_management, mas nenhuma WABA foi atribuída ao usuário do sistema. No Business Manager, vá em Usuários do sistema → Atribuir ativos → Contas do WhatsApp e gere o token novamente.'
-      : 'O token não tem a permissão whatsapp_business_management. Gere um novo token do usuário do sistema marcando whatsapp_business_management e whatsapp_business_messaging.'
+    const hint = !grantedScopes.includes('whatsapp_business_management')
+      ? 'O token não tem a permissão whatsapp_business_management. Gere um novo token do usuário do sistema marcando whatsapp_business_management e whatsapp_business_messaging.'
+      : businessId
+        ? 'Confira se o ID do Business Manager está correto e se as WABAs estão atribuídas ao usuário do sistema com controle total.'
+        : 'Informe o ID do Business Manager no campo ao lado e busque novamente.'
     throw Object.assign(
       new Error(`Nenhuma WABA encontrada para este token. ${hint}`),
       { status: 422 }

@@ -1,7 +1,7 @@
 import api from './api'
 
-export async function lookupWabas(access_token) {
-  const { data } = await api.post('/api/wabas/lookup', { access_token })
+export async function lookupWabas(access_token, business_id) {
+  const { data } = await api.post('/api/wabas/lookup', { access_token, business_id })
   return data // { wabas: [{ waba_id, name }] }
 }
 

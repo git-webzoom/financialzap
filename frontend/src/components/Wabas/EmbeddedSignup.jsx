@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { lookupWabas } from '../../services/wabaService'
+import { wabaLabel } from '../../utils/waba'
 
 /**
  * ConectarWaba
@@ -16,6 +17,7 @@ import { lookupWabas } from '../../services/wabaService'
  */
 export default function ConectarWaba({ onConnect, disabled = false }) {
   const [token,     setToken]     = useState('')
+  const [bmId,      setBmId]      = useState('')
   const [looking,   setLooking]   = useState(false)
   const [lookError, setLookError] = useState('')
 
@@ -35,7 +37,7 @@ export default function ConectarWaba({ onConnect, disabled = false }) {
     setLookError('')
     setConnError('')
     try {
-      const result = await lookupWabas(token.trim())
+      const result = await lookupWabas(token.trim(), bmId.trim() || undefined)
       if (!result.wabas || result.wabas.length === 0) {
         setLookError('Nenhuma WABA encontrada para este token.')
         return
@@ -81,7 +83,7 @@ export default function ConectarWaba({ onConnect, disabled = false }) {
       try {
         await onConnect({ access_token: token.trim(), waba_id: waba.waba_id })
       } catch (err) {
-        errors.push(`${waba.name || waba.waba_id}: ${err.response?.data?.error || err.message}`)
+        errors.push(`${wabaLabel(waba.name, waba.waba_id)}: ${err.response?.data?.error || err.message}`)
       }
     }
 
@@ -123,6 +125,23 @@ export default function ConectarWaba({ onConnect, disabled = false }) {
                 placeholder="EAAn…"
                 value={token}
                 onChange={e => { setToken(e.target.value); setLookError('') }}
+                disabled={disabled || looking}
+                autoComplete="off"
+              />
+            </div>
+          </div>
+
+          <div className="cw-field">
+            <label className="cw-label" htmlFor="cw-bm">ID do Business Manager (opcional)</label>
+            <div className="cw-input-wrap">
+              <input
+                id="cw-bm"
+                className="cw-input"
+                type="text"
+                inputMode="numeric"
+                placeholder="Ex.: 123456789012345"
+                value={bmId}
+                onChange={e => { setBmId(e.target.value); setLookError('') }}
                 disabled={disabled || looking}
                 autoComplete="off"
               />
@@ -187,7 +206,7 @@ export default function ConectarWaba({ onConnect, disabled = false }) {
                       {on && <IconCheck />}
                     </span>
                     <div className="cw-waba-info">
-                      <span className="cw-waba-name">{w.name || '(sem nome)'}</span>
+                      <span className="cw-waba-name">{wabaLabel(w.name || '(sem nome)', w.waba_id)}</span>
                       <span className="cw-waba-id">{w.waba_id}</span>
                     </div>
                   </button>
